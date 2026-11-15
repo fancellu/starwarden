@@ -18,6 +18,10 @@ bevy = { version = "0.20", default-features = false, features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.20", default-features = false, features = ["png"] }
 
+# The web build asks the page how large the game is drawn, to size the touch controls.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Window"] }
+
 # Fast-ish debug builds: optimise dependencies fully, our code lightly.
 [profile.dev]
 opt-level = 1

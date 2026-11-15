@@ -92,6 +92,18 @@ from a sub-folder too.
 The web build uses WebGL2, which every current browser supports. Sound starts after the first
 key press, click or tap, because browsers do not allow audio before that.
 
+### Render resolution on phones
+
+Phones often pair a very dense screen with a modest graphics chip, and drawing every physical
+pixel makes the game stutter. The page therefore watches the frame rate: if it stays below 45
+frames a second, it renders at a lower resolution (1080, 900, 720, 600 or 540 pixels along the
+short side of the screen) and stretches the picture to fit. The setting is remembered in the
+browser for the next visit. If a lower resolution does not raise the frame rate, the change is
+undone.
+
+To choose it yourself, add `?res=720` (any number) or `?res=full` to the address. That also
+switches the automatic adjustment off for that visit.
+
 ## Deploy to Vercel
 
 The live version at <https://starwarden-nine.vercel.app/> is deployed this way. The repository

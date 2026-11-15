@@ -6,7 +6,7 @@ use bevy::window::PrimaryWindow;
 use crate::colonists::{CState, Colonist};
 use crate::consts::*;
 use crate::enemies::{Enemy, Kind};
-use crate::input::{touch_layout, TouchState, STICK_RANGE};
+use crate::input::{page_zoom, stick_range, touch_layout, TouchState};
 use crate::player::PlayerState;
 use crate::state::*;
 use crate::terrain;
@@ -345,7 +345,9 @@ pub fn update_touch_ui(
     let Ok(win) = window.single() else {
         return;
     };
-    let lay = touch_layout(win.width(), win.height());
+    let zoom = page_zoom(win.height());
+    let range = stick_range(zoom);
+    let lay = touch_layout(win.width(), win.height(), zoom);
     let in_game = *state.get() == GameState::Playing;
     // Node sizes are in scaled UI units; touch positions are in window pixels.
     let k = 1.0 / scale.0.max(0.01);
@@ -355,10 +357,10 @@ pub fn update_touch_ui(
             TouchUi::Missile => (Some(lay.missile), ts.missile),
             TouchUi::Bomb => (Some(lay.bomb), ts.bomb),
             TouchUi::Pause => (Some(lay.pause), false),
-            TouchUi::StickBase => (ts.stick.map(|(_, o, _)| (o, STICK_RANGE)), false),
+            TouchUi::StickBase => (ts.stick.map(|(_, o, _)| (o, range)), false),
             TouchUi::StickKnob => (
                 ts.stick.map(|(_, o, p)| {
-                    (o + (p - o).clamp_length_max(STICK_RANGE), STICK_RANGE * 0.45)
+                    (o + (p - o).clamp_length_max(range), range * 0.45)
                 }),
                 true,
             ),

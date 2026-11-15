@@ -27,16 +27,43 @@ pub struct TouchLayout {
     pub pause: (Vec2, f32),
 }
 
-pub const STICK_RANGE: f32 = 56.0;
+const STICK_RANGE: f32 = 56.0;
 
-pub fn touch_layout(w: f32, h: f32) -> TouchLayout {
+/// How much the web page magnifies the canvas. On phones the page may render the game at a
+/// reduced resolution and stretch it (see `index.html`), which makes one window pixel larger
+/// than one CSS pixel. Touch controls are sized for thumbs, so they divide this back out.
+pub fn page_zoom(window_height: f32) -> f32 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let page = web_sys::window()
+            .and_then(|w| w.inner_height().ok())
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        if page > 0.0 && window_height > 0.0 {
+            return (page / window_height).clamp(1.0, 8.0);
+        }
+    }
+    let _ = window_height;
+    1.0
+}
+
+/// Stick travel in window pixels.
+pub fn stick_range(zoom: f32) -> f32 {
+    STICK_RANGE / zoom
+}
+
+/// Button centres and radii in window pixels, for a window of `w` x `h` magnified by `zoom`.
+pub fn touch_layout(w: f32, h: f32, zoom: f32) -> TouchLayout {
+    // Lay out in on-screen (CSS) pixels, then convert back to window pixels.
+    let (w, h) = (w * zoom, h * zoom);
     // Scale the controls down a little on small screens.
     let s = (w.min(h) / 420.0).clamp(0.75, 1.3);
+    let at = |x: f32, y: f32, r: f32| (Vec2::new(x, y) / zoom, r / zoom);
     TouchLayout {
-        fire: (Vec2::new(w - 84.0 * s, h - 84.0 * s), 58.0 * s),
-        missile: (Vec2::new(w - 204.0 * s, h - 64.0 * s), 42.0 * s),
-        bomb: (Vec2::new(w - 72.0 * s, h - 204.0 * s), 42.0 * s),
-        pause: (Vec2::new(w - 36.0, 112.0), 24.0),
+        fire: at(w - 84.0 * s, h - 84.0 * s, 58.0 * s),
+        missile: at(w - 204.0 * s, h - 64.0 * s, 42.0 * s),
+        bomb: at(w - 72.0 * s, h - 204.0 * s, 42.0 * s),
+        pause: at(w - 36.0, 112.0, 24.0),
     }
 }
 
@@ -130,7 +157,9 @@ pub fn gather_input(
     // --- Touch ---
     if let Ok(win) = window.single() {
         let (w, h) = (win.width(), win.height());
-        let lay = touch_layout(w, h);
+        let zoom = page_zoom(h);
+        let range = stick_range(zoom);
+        let lay = touch_layout(w, h, zoom);
         ts.fire = false;
         ts.missile = false;
         ts.bomb = false;
@@ -162,12 +191,12 @@ pub fn gather_input(
                     let mut origin = origin;
                     let mut d = t.position() - origin;
                     // The stick base follows the thumb once it is dragged past its range.
-                    if d.length() > STICK_RANGE * 1.6 {
-                        origin = t.position() - d.normalize() * STICK_RANGE * 1.6;
+                    if d.length() > range * 1.6 {
+                        origin = t.position() - d.normalize() * range * 1.6;
                         d = t.position() - origin;
                     }
                     ts.stick = Some((id, origin, t.position()));
-                    let v = (d / STICK_RANGE).clamp_length_max(1.0);
+                    let v = (d / range).clamp_length_max(1.0);
                     let dead = |x: f32| if x.abs() < 0.18 { 0.0 } else { x };
                     i.mv.x += dead(v.x);
                     i.mv.y -= dead(v.y);
@@ -197,7 +226,7 @@ mod tests {
     #[test]
     fn touch_buttons_fit_on_small_and_large_screens() {
         for (w, h) in [(360.0, 640.0), (640.0, 360.0), (1280.0, 720.0), (2560.0, 1440.0)] {
-            let l = touch_layout(w, h);
+            let l = touch_layout(w, h, 1.0);
             for (c, r) in [l.fire, l.missile, l.bomb, l.pause] {
                 assert!(c.x - r >= 0.0 && c.x + r <= w, "{w}x{h}: {c} r{r}");
                 assert!(c.y - r >= 0.0 && c.y + r <= h, "{w}x{h}: {c} r{r}");
@@ -206,6 +235,10 @@ mod tests {
             assert!(l.fire.0.distance(l.missile.0) > l.fire.1 + l.missile.1);
             assert!(l.fire.0.distance(l.bomb.0) > l.fire.1 + l.bomb.1);
             assert!(l.missile.0.distance(l.bomb.0) > l.missile.1 + l.bomb.1);
+            // Rendering at half resolution leaves the buttons in the same place on screen.
+            let half = touch_layout(w / 2.0, h / 2.0, 2.0);
+            assert!((half.bomb.0 * 2.0).distance(l.bomb.0) < 0.01);
+            assert!((half.bomb.1 * 2.0 - l.bomb.1).abs() < 0.01);
         }
     }
 }

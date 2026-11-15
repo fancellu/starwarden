@@ -35,6 +35,8 @@
         width: 100vw;
         height: 100vh;
         height: 100dvh;
+        /* The resolution script below may shrink this box and scale it back up. */
+        transform-origin: 0 0;
       }
       canvas {
         display: block;
@@ -92,6 +94,109 @@
           }
         }
         events.forEach((e) => document.addEventListener(e, resume));
+      })();
+
+      // Render resolution. Phones often have very dense screens and modest graphics chips, and
+      // drawing every physical pixel makes the game stutter there. To draw fewer pixels, the
+      // stage is laid out smaller than the window and stretched back with a CSS transform; the
+      // game sizes its canvas from the stage, so it never needs to know.
+      //
+      // The limit is the number of pixels along the short side of the screen. It starts at the
+      // screen's own resolution and steps down while the frame rate stays low. The result is
+      // remembered for the next visit. Override with ?res=720 (any number) or ?res=full.
+      (function () {
+        const STEPS = [1080, 900, 720, 600, 540];
+        const KEY = "starwarden.res";
+        const param = new URLSearchParams(location.search).get("res");
+        let limit = Infinity;
+        let adaptive = true;
+        if (param === "full") {
+          adaptive = false;
+        } else if (Number(param) >= 240) {
+          limit = Number(param);
+          adaptive = false;
+        } else {
+          try {
+            const saved = Number(localStorage.getItem(KEY));
+            if (saved >= 240) limit = saved;
+          } catch (e) {}
+        }
+
+        function nativeShort() {
+          return Math.min(innerWidth, innerHeight) * (devicePixelRatio || 1);
+        }
+        function apply() {
+          const stage = document.getElementById("stage");
+          if (!stage) return;
+          const k = Math.max(1, nativeShort() / limit);
+          stage.style.width = innerWidth / k + "px";
+          stage.style.height = innerHeight / k + "px";
+          stage.style.transform = k > 1 ? "scale(" + k + ")" : "";
+        }
+        function setLimit(value, remember) {
+          limit = value;
+          apply();
+          if (remember) {
+            try {
+              if (value === Infinity) localStorage.removeItem(KEY);
+              else localStorage.setItem(KEY, String(value));
+            } catch (e) {}
+          }
+        }
+        window.addEventListener("resize", apply);
+        document.addEventListener("DOMContentLoaded", apply);
+
+        if (!adaptive) return;
+        // Frame-rate watchdog: two slow 2-second windows in a row lower the resolution a step.
+        // If a step does not help (the browser is capping the frame rate, or the processor is
+        // the limit, not the pixels) it is undone and the watchdog stops.
+        const SLOW_FPS = 45;
+        window.addEventListener("TrunkApplicationStarted", () => {
+          let frames = 0;
+          let windowStart = 0;
+          let skip = 2; // windows to ignore: start-up, and after each change
+          let slow = 0;
+          let before = null; // { limit, fps } from before the last step down
+          function tick(now) {
+            if (!adaptive) return;
+            requestAnimationFrame(tick);
+            if (document.hidden || !windowStart) {
+              windowStart = now;
+              frames = 0;
+              return;
+            }
+            frames++;
+            const elapsed = now - windowStart;
+            if (elapsed < 2000) return;
+            const fps = (frames * 1000) / elapsed;
+            windowStart = now;
+            frames = 0;
+            if (elapsed > 2500) return; // the tab was stalled or in the background
+            if (skip > 0) {
+              skip--;
+              return;
+            }
+            if (before) {
+              if (fps < before.fps * 1.1) {
+                setLimit(before.limit, true);
+                adaptive = false;
+                return;
+              }
+              before = null;
+            }
+            slow = fps < SLOW_FPS ? slow + 1 : 0;
+            if (slow < 2) return;
+            const current = Math.min(limit, nativeShort());
+            // Take a step big enough to matter: at least a fifth fewer pixels along each side.
+            const next = STEPS.find((s) => s <= current * 0.8);
+            if (!next) return;
+            before = { limit: limit, fps: fps };
+            setLimit(next, true);
+            slow = 0;
+            skip = 1;
+          }
+          requestAnimationFrame(tick);
+        });
       })();
 
       // Hide the loading text once the game is running and give the canvas keyboard focus.
