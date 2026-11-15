@@ -1,7 +1,7 @@
-//! Sound effects are synthesised at startup and handed to Bevy as in-memory WAV data, so the
-//! game ships without any audio files.
+//! Sound effects are synthesised at startup, so the game ships without any audio files. On the
+//! desktop they are handed to Bevy as in-memory WAV data; on the web they go straight to the
+//! browser's audio engine.
 
-use bevy::audio::Volume;
 use bevy::prelude::*;
 use std::f32::consts::TAU;
 
@@ -239,6 +239,7 @@ fn thrust_loop() -> Vec<f32> {
 }
 
 /// Encodes mono samples as a 16-bit PCM WAV file.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
     let data_len = (samples.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + data_len as usize);
@@ -298,54 +299,190 @@ fn volume(sfx: Sfx) -> f32 {
     }
 }
 
-#[derive(Resource)]
-pub struct Sounds(Vec<(Sfx, Handle<AudioSource>)>);
+/// Desktop playback: each sound becomes an in-memory WAV file that Bevy's audio plays.
+#[cfg(not(target_arch = "wasm32"))]
+mod backend {
+    use bevy::audio::Volume;
+    use bevy::prelude::*;
 
-#[derive(Component)]
-pub struct ThrustLoop;
+    use super::{encode_wav, synth, thrust_loop, volume, ALL};
+    use crate::state::Sfx;
 
-pub fn setup_audio(mut commands: Commands, mut sources: ResMut<Assets<AudioSource>>) {
-    let mut add = |samples: Vec<f32>| {
-        sources.add(AudioSource {
-            bytes: encode_wav(&samples).into(),
-        })
-    };
-    let sounds = ALL.iter().map(|s| (*s, add(synth(*s)))).collect();
-    let thrust = add(thrust_loop());
-    commands.insert_resource(Sounds(sounds));
-    commands.spawn((
-        ThrustLoop,
-        AudioPlayer::new(thrust),
-        PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0)),
-    ));
-}
+    #[derive(Resource)]
+    pub struct Sounds(Vec<(Sfx, Handle<AudioSource>)>);
 
-pub fn play_sfx(mut commands: Commands, mut reader: MessageReader<Sfx>, sounds: Res<Sounds>) {
-    // Play each distinct effect at most once per frame.
-    let mut seen: Vec<Sfx> = Vec::new();
-    for s in reader.read() {
-        if seen.contains(s) {
-            continue;
+    #[derive(Component)]
+    pub struct ThrustLoop;
+
+    pub fn setup_audio(mut commands: Commands, mut sources: ResMut<Assets<AudioSource>>) {
+        let mut add = |samples: Vec<f32>| {
+            sources.add(AudioSource {
+                bytes: encode_wav(&samples).into(),
+            })
+        };
+        let sounds = ALL.iter().map(|s| (*s, add(synth(*s)))).collect();
+        let thrust = add(thrust_loop());
+        commands.insert_resource(Sounds(sounds));
+        commands.spawn((
+            ThrustLoop,
+            AudioPlayer::new(thrust),
+            PlaybackSettings::LOOP.with_volume(Volume::Linear(0.0)),
+        ));
+    }
+
+    pub fn play(In(wanted): In<Vec<Sfx>>, mut commands: Commands, sounds: Res<Sounds>) {
+        for s in wanted {
+            if let Some((_, h)) = sounds.0.iter().find(|(k, _)| *k == s) {
+                commands.spawn((
+                    AudioPlayer::new(h.clone()),
+                    PlaybackSettings::DESPAWN.with_volume(Volume::Linear(volume(s))),
+                ));
+            }
         }
-        seen.push(*s);
-        if let Some((_, h)) = sounds.0.iter().find(|(k, _)| k == s) {
-            commands.spawn((
-                AudioPlayer::new(h.clone()),
-                PlaybackSettings::DESPAWN.with_volume(Volume::Linear(volume(*s))),
-            ));
+    }
+
+    pub fn set_thrust(In(level): In<f32>, mut q: Query<&mut AudioSink, With<ThrustLoop>>) {
+        for mut sink in &mut q {
+            sink.set_volume(Volume::Linear(level));
         }
     }
 }
 
+/// Web playback: the sounds are handed to the browser's own audio engine.
+///
+/// Bevy's audio on the web is mixed by the game's code on the page's main thread, a few
+/// hundredths of a second ahead. Whenever a frame takes longer than that, which is common on
+/// phones, the sound stutters. The browser's engine mixes on its own thread, so a slow frame
+/// can delay the start of a sound but can never break one up.
+#[cfg(target_arch = "wasm32")]
+mod backend {
+    use bevy::prelude::*;
+    use std::cell::RefCell;
+    use web_sys::{AudioBuffer, AudioContext, AudioContextState, GainNode};
+
+    use super::{synth, thrust_loop, volume, ALL, RATE};
+    use crate::state::Sfx;
+
+    struct WebAudio {
+        ctx: AudioContext,
+        buffers: Vec<(Sfx, AudioBuffer)>,
+        thrust: GainNode,
+    }
+
+    // Browser objects cannot leave the main thread, so they live here, not in a resource.
+    thread_local! {
+        static AUDIO: RefCell<Option<WebAudio>> = const { RefCell::new(None) };
+    }
+
+    fn build() -> Option<WebAudio> {
+        let ctx = AudioContext::new().ok()?;
+        let buffer = |samples: Vec<f32>| -> Option<AudioBuffer> {
+            let b = ctx
+                .create_buffer(1, samples.len() as u32, RATE as f32)
+                .ok()?;
+            b.copy_to_channel(&samples, 0).ok()?;
+            Some(b)
+        };
+        let mut buffers = Vec::new();
+        for s in ALL {
+            buffers.push((s, buffer(synth(s))?));
+        }
+        // The engine rumble loops for ever; only its volume changes.
+        let thrust = ctx.create_gain().ok()?;
+        thrust.gain().set_value(0.0);
+        thrust.connect_with_audio_node(&ctx.destination()).ok()?;
+        let source = ctx.create_buffer_source().ok()?;
+        source.set_buffer(Some(&buffer(thrust_loop())?));
+        source.set_loop(true);
+        source.connect_with_audio_node(&thrust).ok()?;
+        source.start().ok()?;
+        Some(WebAudio {
+            ctx,
+            buffers,
+            thrust,
+        })
+    }
+
+    pub fn setup_audio() {
+        let audio = build();
+        if audio.is_none() {
+            warn!("Web Audio is not available; the game will be silent");
+        }
+        AUDIO.with(|a| *a.borrow_mut() = audio);
+    }
+
+    pub fn play(In(wanted): In<Vec<Sfx>>) {
+        AUDIO.with(|a| {
+            let a = a.borrow();
+            let Some(audio) = a.as_ref() else {
+                return;
+            };
+            // Until the player's first key press or tap the browser keeps audio suspended, and
+            // anything started now would all play at once when it resumes.
+            if audio.ctx.state() != AudioContextState::Running {
+                return;
+            }
+            for s in wanted {
+                let Some((_, buffer)) = audio.buffers.iter().find(|(k, _)| *k == s) else {
+                    continue;
+                };
+                let (Ok(source), Ok(gain)) =
+                    (audio.ctx.create_buffer_source(), audio.ctx.create_gain())
+                else {
+                    continue;
+                };
+                source.set_buffer(Some(buffer));
+                gain.gain().set_value(volume(s));
+                let _ = source.connect_with_audio_node(&gain);
+                let _ = gain.connect_with_audio_node(&audio.ctx.destination());
+                let _ = source.start();
+            }
+        });
+    }
+
+    pub fn set_thrust(In(level): In<f32>) {
+        AUDIO.with(|a| {
+            if let Some(audio) = a.borrow().as_ref() {
+                audio.thrust.gain().set_value(level);
+            }
+        });
+    }
+}
+
+pub use backend::setup_audio;
+
+/// Collects this frame's sound requests: each distinct effect at most once.
+fn wanted_sfx(mut reader: MessageReader<Sfx>) -> Vec<Sfx> {
+    let mut seen: Vec<Sfx> = Vec::new();
+    for s in reader.read() {
+        if !seen.contains(s) {
+            seen.push(*s);
+        }
+    }
+    seen
+}
+
+/// Plays the sounds requested this frame.
+pub fn play_sfx_plugin(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            wanted_sfx.pipe(backend::play),
+            thrust_level.pipe(backend::set_thrust),
+        )
+            .chain()
+            .in_set(crate::state::Step::Present),
+    );
+}
+
 /// The engine rumble follows the throttle.
-pub fn thrust_audio(
+fn thrust_level(
     time: Res<Time>,
     state: Res<State<GameState>>,
     input: Res<PlayerInput>,
     ps: Res<PlayerState>,
     mut level: Local<f32>,
-    mut q: Query<&mut AudioSink, With<ThrustLoop>>,
-) {
+) -> f32 {
     let playing = *state.get() == GameState::Playing && ps.alive;
     let target = if playing {
         0.05 + input.mv.x.abs() * 0.3
@@ -353,9 +490,7 @@ pub fn thrust_audio(
         0.0
     };
     *level += (target - *level) * (time.delta_secs() * 8.0).min(1.0);
-    for mut sink in &mut q {
-        sink.set_volume(Volume::Linear(*level));
-    }
+    *level
 }
 
 #[cfg(test)]

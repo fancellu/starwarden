@@ -94,10 +94,16 @@ key press, click or tap, because browsers do not allow audio before that.
 
 ### Graphics quality on phones
 
-Phones often pair a very dense screen with a modest graphics chip, and the game stutters if it
-draws every physical pixel with full glow effects. The page therefore watches the frame rate.
-While it stays below 45 frames a second it tries these steps in turn, keeping each one that
-helps and undoing each one that does not:
+Phones often pair a very dense, fast screen with a modest processor and graphics chip, and the
+game stutters if it runs flat out. The page therefore watches how the game is doing and turns
+things down by itself.
+
+If the game's code fills more than 40% of the time between frames, which happens on 120 Hz
+phones, the frame rate is capped at 60. A steady 60 looks smoother than an uneven 110, and it
+leaves time for the sound, which is fed from the same thread.
+
+While the frame rate stays below 45 a second, it tries these steps in turn, keeping each one
+that helps and undoing each one that does not:
 
 1. Render at 900 pixels along the short side of the screen, stretched to fit.
 2. "Lite" graphics: switch off the HDR and bloom passes that produce the glow.
@@ -109,13 +115,14 @@ To choose for yourself, add any of these to the address:
 
 | Address ending     | Effect                                                    |
 | ------------------ | --------------------------------------------------------- |
+| `?fps=60`          | Cap at 60 frames a second (`?fps=full` never caps)        |
 | `?res=720`         | Fixed resolution (any number, or `full`)                  |
 | `?lite=1`          | Glow effects off (`?lite=0` forces them on)               |
 | `?quality=reset`   | Forget the remembered result and start again from full    |
 | `?debug=1`         | Show frame rate and timings on screen                     |
 
-`res` and `lite` switch the automatic adjustment off for that visit. They can be combined, for
-example `?res=540&lite=1&debug=1`. On the desktop, set the `STARWARDEN_LITE` environment
+`fps`, `res` and `lite` each switch their part of the automatic adjustment off for that visit.
+They can be combined, for example `?fps=60&res=540&lite=1&debug=1`. On the desktop, set the `STARWARDEN_LITE` environment
 variable to see the lite graphics.
 
 ## Deploy to Vercel

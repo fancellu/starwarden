@@ -245,19 +245,29 @@ rather than a `Sprite`.
 ## Sound without asset files
 
 [`src/audio.rs`](../src/audio.rs) synthesises every sound at start-up. `synth(Sfx)` builds a
-buffer of samples from oscillators, noise and envelopes; `encode_wav` wraps it in a WAV
-header in memory; and the result is handed to Bevy as if it had been loaded from a file.
+buffer of samples from oscillators, noise and envelopes.
 
-Playing a sound is then just a message. Any system writes `Sfx::ExplodeBig`, and `play_sfx`
-plays it at the end of the frame, at most once per effect per frame so that twenty
-simultaneous explosions do not add up to a deafening one. The engine hum is a single looping
-sound whose volume follows the thrust.
+Playing a sound is then just a message. Any system writes `Sfx::ExplodeBig`, and it is played
+at the end of the frame, at most once per effect per frame so that twenty simultaneous
+explosions do not add up to a deafening one. The engine hum is a single looping sound whose
+volume follows the thrust.
+
+How the samples reach the speakers differs by platform, in two `backend` modules:
+
+- **Desktop:** `encode_wav` wraps each buffer in a WAV header in memory, and the result is
+  handed to Bevy's audio as if it had been loaded from a file.
+- **Web:** the buffers are given to the browser's own Web Audio engine, and Bevy's audio is
+  not compiled in at all. Bevy's web audio is mixed by the game's code on the page's main
+  thread, only a few hundredths of a second ahead, so a slow frame makes the sound stutter.
+  That is rare on a desktop and constant on a mid-range phone. The browser's engine runs on
+  its own thread, so a slow frame can delay a sound but cannot break one up.
 
 ## Desktop and web from one codebase
 
 Almost nothing in the Rust code is platform-specific. The differences are:
 
 - `Msaa::Off` on the web, because WebGL2 cannot combine it with HDR.
+- Sound playback, as described above.
 - `dev.rs` (the self-playing demo) is compiled only on the desktop.
 - `page_zoom` in `input.rs` asks the browser how large the game is drawn.
 - `lite_graphics` in `main.rs` asks the page whether to drop the glow effects.
@@ -267,6 +277,9 @@ It contains two pieces of JavaScript worth knowing about:
 
 - Browsers refuse to play sound before the user interacts with the page, so a small shim
   resumes audio on the first key press or tap.
+- The page wraps `requestAnimationFrame`, the browser call the game uses to ask for each
+  frame. That lets it time the game's code and hold the game to 60 frames a second on
+  phones whose 120 Hz screens would otherwise keep the processor too busy to feed the sound.
 - A frame-rate watchdog lowers the graphics quality on devices that cannot keep up. To
   lower the resolution it shrinks the element holding the canvas and stretches it back with
   a CSS transform, so the game simply sees a smaller window; `page_zoom` exists to keep the

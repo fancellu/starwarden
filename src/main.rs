@@ -181,12 +181,12 @@ fn main() {
             hud::update_touch_ui,
             hud::draw_overlays,
             menus::animate_menus,
-            audio::play_sfx,
-            audio::thrust_audio,
         )
             .chain()
             .in_set(Step::Present),
     );
+
+    audio::play_sfx_plugin(&mut app);
 
     #[cfg(not(target_arch = "wasm32"))]
     dev::plugin(&mut app);
