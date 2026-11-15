@@ -4,6 +4,8 @@ A side-scrolling planet-defence shooter written in Rust with [Bevy](https://bevy
 It runs on the desktop and in the browser (WebAssembly), and plays with keyboard, gamepad or
 touch.
 
+**[Play it in your browser](https://starwarden-nine.vercel.app/)**
+
 All art, terrain and sound effects are generated in code. There are no asset files.
 
 ![The game playing itself](docs/demo.gif)
@@ -92,7 +94,8 @@ key press, click or tap, because browsers do not allow audio before that.
 
 ## Deploy to Vercel
 
-The repository is set up so that Vercel builds the game itself:
+The live version at <https://starwarden-nine.vercel.app/> is deployed this way. The repository
+is set up so that Vercel builds the game itself:
 
 - `vercel.json` tells Vercel to run `scripts/vercel-build.sh` and publish `dist/`.
 - `scripts/vercel-build.sh` installs Rust and a prebuilt Trunk on the build machine, then runs
