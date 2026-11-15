@@ -25,10 +25,10 @@ pub struct Demo {
     wiped: bool,
     /// Run length in seconds (`STARWARDEN_DEMO_SECS`, default 20).
     secs: f32,
+    /// Seconds between screenshots (`STARWARDEN_DEMO_EVERY`, default 2.5). Use a small value
+    /// such as 0.08 to capture frames for an animation.
+    every: f32,
 }
-
-/// A screenshot is taken on the title screen and then at this interval.
-const SHOT_EVERY: f32 = 2.5;
 
 pub fn plugin(app: &mut App) {
     let Ok(dir) = std::env::var("STARWARDEN_DEMO") else {
@@ -44,6 +44,10 @@ pub fn plugin(app: &mut App) {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(20.0),
+        every: std::env::var("STARWARDEN_DEMO_EVERY")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(2.5),
     })
     .add_systems(
         Update,
@@ -122,8 +126,8 @@ fn demo(
             commands.entity(e).try_despawn();
         }
     }
-    if t >= 0.9 + demo.next_shot as f32 * SHOT_EVERY {
-        let path = format!("{}/shot{:02}.png", demo.dir, demo.next_shot);
+    if t >= 0.9 + demo.next_shot as f32 * demo.every {
+        let path = format!("{}/shot{:03}.png", demo.dir, demo.next_shot);
         commands
             .spawn(Screenshot::primary_window())
             .observe(save_to_disk(path));

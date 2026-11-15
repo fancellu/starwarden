@@ -3,6 +3,8 @@
 use bevy::prelude::*;
 
 pub const TITLE: &str = "STARWARDEN";
+/// Shown on the title screen.
+pub const REPO_URL: &str = "github.com/fancellu/starwarden";
 
 // Display names (used in the title screen legend).
 pub const NAME_HARVESTER: &str = "HARVESTER";

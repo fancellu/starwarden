@@ -80,6 +80,14 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
             ),
             (Blink, line("PRESS SPACE, (A) OR TAP TO START", 24.0, C_WHITE)),
             line(format!("BEST {:07}", game.high), 16.0, C_AMBER),
+            (
+                Node {
+                    position_type: PositionType::Absolute,
+                    top: px(40),
+                    ..default()
+                },
+                line(REPO_URL, 13.0, dim),
+            ),
         ],
     ));
 }

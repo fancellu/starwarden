@@ -6,6 +6,13 @@ touch.
 
 All art, terrain and sound effects are generated in code. There are no asset files.
 
+![The game playing itself](docs/demo.gif)
+
+| | |
+| --- | --- |
+| ![Title screen](docs/title.png) | ![A Harvester approaching](docs/combat.png) |
+| ![A Hive bursting](docs/explosion.png) | ![Elite enemies in the void phase](docs/void.png) |
+
 ## How to play
 
 You patrol a small planet that wraps around: keep flying in one direction and you come back to
@@ -146,9 +153,17 @@ Self-playing demo with screenshots (desktop only), useful for checking a change 
 STARWARDEN_DEMO=./shots cargo run
 ```
 
-Optional extras: `STARWARDEN_DEMO_SECS=60` sets the run length, `STARWARDEN_DEMO_VOID=1` forces
-the void phase, and `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type. The output folder
-must already exist.
+Optional extras: `STARWARDEN_DEMO_SECS=60` sets the run length, `STARWARDEN_DEMO_EVERY=0.08`
+sets the seconds between screenshots (default 2.5), `STARWARDEN_DEMO_VOID=1` forces the void
+phase, and `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type. The output folder must
+already exist.
+
+The images in `docs/` were made this way. The animation is the frames of a run at 0.08 s
+intervals joined with ffmpeg:
+
+```sh
+ffmpeg -framerate 12.5 -i shots/shot%03d.png -vf "fps=10,scale=600:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer:bayer_scale=5" docs/demo.gif
+```
 
 ## Known limits
 
