@@ -1,0 +1,10 @@
+[build]
+target = "index.html"
+dist = "dist"
+# Relative URLs, so the contents of dist/ can be hosted from any folder (e.g. GitHub Pages).
+public_url = "./"
+
+[serve]
+# Local only by default. To test touch controls from a phone on the same network, run
+# `trunk serve --address 0.0.0.0` and open http://<this-computer's-ip>:8080 on the phone.
+port = 8080

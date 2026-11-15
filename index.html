@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#05030f" />
+    <title>Starwarden</title>
+
+    <link data-trunk rel="rust" data-bin="starwarden" data-cargo-profile="wasm-release" data-wasm-opt="s" />
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #05030f;
+        /* Stop the page from scrolling, zooming or selecting text while playing. */
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+        touch-action: none;
+      }
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        color: #7fe9ff;
+        font: 600 15px/1.4 ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+        letter-spacing: 0.3em;
+        pointer-events: none;
+      }
+      #loading b {
+        font-size: 34px;
+        letter-spacing: 0.2em;
+        color: #ff6ad5;
+      }
+      #loading.done {
+        display: none;
+      }
+    </style>
+
+    <script>
+      // Browsers keep audio suspended until the player interacts with the page. This resumes
+      // every AudioContext the game creates on the first key press, click or touch.
+      (function () {
+        const contexts = [];
+        const events = ["click", "mousedown", "pointerup", "touchend", "keydown", "keyup"];
+        const Native = self.AudioContext || self.webkitAudioContext;
+        if (!Native) return;
+        self.AudioContext = new Proxy(Native, {
+          construct(target, args) {
+            const ctx = new target(...args);
+            contexts.push(ctx);
+            return ctx;
+          },
+        });
+        function resume() {
+          let running = 0;
+          for (const ctx of contexts) {
+            if (ctx.state !== "running") ctx.resume();
+            else running++;
+          }
+          if (running > 0 && running === contexts.length) {
+            events.forEach((e) => document.removeEventListener(e, resume));
+          }
+        }
+        events.forEach((e) => document.addEventListener(e, resume));
+      })();
+
+      // Hide the loading text once the game is running and give the canvas keyboard focus.
+      window.addEventListener("TrunkApplicationStarted", () => {
+        document.getElementById("loading").classList.add("done");
+        const canvas = document.getElementById("game");
+        canvas.setAttribute("tabindex", "0");
+        canvas.focus();
+      });
+    </script>
+  </head>
+  <body>
+    <div id="stage"><canvas id="game"></canvas></div>
+    <div id="loading"><b>STARWARDEN</b>LOADING</div>
+  </body>
+</html>
