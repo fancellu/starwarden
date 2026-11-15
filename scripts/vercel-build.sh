@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the web version into dist/ on Vercel's build machine (Amazon Linux 2023, x86_64).
 # Vercel runs this as the build command (see vercel.json). The machine has a C compiler, curl,
-# tar and gzip, but no Rust and no Trunk, so both are fetched here.
+# tar and gzip, but only an old Rust and no Trunk, so both are fetched here.
 #
 # To try it locally in the same OS, see "Deploy to Vercel" in README.md.
 set -euo pipefail
@@ -13,12 +13,15 @@ cd "$(dirname "$0")/.."
 
 # Rust with the WebAssembly target.
 export PATH="$HOME/.cargo/bin:$TOOLS:$PATH"
-if ! command -v cargo >/dev/null 2>&1; then
+if ! command -v rustup >/dev/null 2>&1; then
     echo "==> Installing Rust"
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
-        sh -s -- -y --profile minimal --default-toolchain stable
+        sh -s -- -y --profile minimal --default-toolchain none
 fi
-rustup target add wasm32-unknown-unknown
+# Vercel's image ships an old Rust; Bevy needs a recent one, so always fetch the latest stable.
+echo "==> Updating Rust"
+rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown
+export RUSTUP_TOOLCHAIN=stable
 
 # Trunk, as a prebuilt static binary (compiling it would add several minutes).
 if ! command -v trunk >/dev/null 2>&1; then
