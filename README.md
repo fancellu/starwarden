@@ -90,7 +90,9 @@ Cloudflare Pages, itch.io (zip the folder) or your own server. Paths are relativ
 from a sub-folder too.
 
 The web build uses WebGL2, which every current browser supports. Sound starts after the first
-key press, click or tap, because browsers do not allow audio before that.
+key press, click or tap, because browsers do not allow audio before that. Gamepad buttons do
+not count, so when playing with a controller, click the page or press a key once; a hint at the
+bottom of the screen says so while the sound is waiting.
 
 ### Graphics quality on phones
 
@@ -99,8 +101,9 @@ game stutters if it runs flat out. The page therefore watches how the game is do
 things down by itself.
 
 If the game's code fills more than 40% of the time between frames, which happens on 120 Hz
-phones, the frame rate is capped at 60. A steady 60 looks smoother than an uneven 110, and it
-leaves time for the sound, which is fed from the same thread.
+phones, the game draws on every other screen refresh: 60 frames a second on a 120 Hz screen,
+45 on a 90 Hz one. A steady rate looks smoother than an uneven 110 and leaves the processor
+time to spare.
 
 While the frame rate stays below 45 a second, it tries these steps in turn, keeping each one
 that helps and undoing each one that does not:
@@ -115,7 +118,7 @@ To choose for yourself, add any of these to the address:
 
 | Address ending     | Effect                                                    |
 | ------------------ | --------------------------------------------------------- |
-| `?fps=60`          | Cap at 60 frames a second (`?fps=full` never caps)        |
+| `?fps=60`          | Draw on every other refresh (`?fps=full` never caps)      |
 | `?res=720`         | Fixed resolution (any number, or `full`)                  |
 | `?lite=1`          | Glow effects off (`?lite=0` forces them on)               |
 | `?quality=reset`   | Forget the remembered result and start again from full    |

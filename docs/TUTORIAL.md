@@ -276,10 +276,11 @@ The web side is [`index.html`](../index.html), which Trunk turns into the deploy
 It contains two pieces of JavaScript worth knowing about:
 
 - Browsers refuse to play sound before the user interacts with the page, so a small shim
-  resumes audio on the first key press or tap.
+  resumes audio on the first key press or tap. Gamepad buttons do not count, so it shows a
+  "click or press any key" hint while the sound is waiting.
 - The page wraps `requestAnimationFrame`, the browser call the game uses to ask for each
-  frame. That lets it time the game's code and hold the game to 60 frames a second on
-  phones whose 120 Hz screens would otherwise keep the processor too busy to feed the sound.
+  frame. That lets it time the game's code and, on busy phones, draw only every other screen
+  refresh (60 frames a second at 120 Hz, 45 at 90 Hz).
 - A frame-rate watchdog lowers the graphics quality on devices that cannot keep up. To
   lower the resolution it shrinks the element holding the canvas and stretches it back with
   a CSS transform, so the game simply sees a smaller window; `page_zoom` exists to keep the

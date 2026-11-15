@@ -71,29 +71,65 @@
     <script>
       // Browsers keep audio suspended until the player interacts with the page. This resumes
       // every AudioContext the game creates on the first key press, click or touch.
+      //
+      // Gamepad buttons do not count as interacting in Chrome or Firefox, so someone playing
+      // with a controller gets no sound until they click or press a key. A small hint says so
+      // while the sound is waiting. A gamepad press still tries to resume, in case the
+      // browser allows it.
       (function () {
         const contexts = [];
         const events = ["click", "mousedown", "pointerup", "touchend", "keydown", "keyup"];
         const Native = self.AudioContext || self.webkitAudioContext;
         if (!Native) return;
+        let hint = null;
+        let started = false;
+        function allRunning() {
+          return contexts.length > 0 && contexts.every((ctx) => ctx.state === "running");
+        }
+        function update() {
+          if (hint) hint.hidden = !started || contexts.length === 0 || allRunning();
+        }
         self.AudioContext = new Proxy(Native, {
           construct(target, args) {
             const ctx = new target(...args);
             contexts.push(ctx);
+            ctx.addEventListener("statechange", update);
+            // Created after the player already interacted: no need to wait for another event.
+            if (navigator.userActivation && navigator.userActivation.hasBeenActive) ctx.resume();
+            update();
             return ctx;
           },
         });
+        // The listeners stay for good: a phone can suspend audio again later, for example
+        // during a call, and the next touch should bring it back.
         function resume() {
-          let running = 0;
-          for (const ctx of contexts) {
-            if (ctx.state !== "running") ctx.resume();
-            else running++;
-          }
-          if (running > 0 && running === contexts.length) {
-            events.forEach((e) => document.removeEventListener(e, resume));
-          }
+          for (const ctx of contexts) if (ctx.state !== "running") ctx.resume();
         }
         events.forEach((e) => document.addEventListener(e, resume));
+
+        setInterval(() => {
+          if (allRunning() || !navigator.getGamepads) return;
+          for (const pad of navigator.getGamepads()) {
+            if (pad && pad.buttons.some((b) => b.pressed)) return resume();
+          }
+        }, 250);
+
+        document.addEventListener("DOMContentLoaded", () => {
+          hint = document.createElement("div");
+          hint.textContent = "Click or press any key to turn on sound";
+          hint.hidden = true;
+          hint.style.cssText =
+            "position:fixed;left:50%;bottom:12px;transform:translateX(-50%);padding:4px 12px;" +
+            "border-radius:12px;background:rgba(0,0,0,.6);color:#7fe9ff;" +
+            "font:600 13px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;" +
+            "pointer-events:none;z-index:10;white-space:nowrap";
+          document.body.appendChild(hint);
+          update();
+        });
+        window.addEventListener("TrunkApplicationStarted", () => {
+          started = true;
+          update();
+        });
       })();
 
       // Frame pacing and timing. The game asks the browser for a new frame on every screen
@@ -108,7 +144,9 @@
         const pending = new Set();
         let nextHandle = 1;
         let lastRun = -1e9;
+        let lastTick = 0;
         const state = {
+          refresh: 0, // smoothed gap between screen refreshes, capped or not
           minGap: 0, // milliseconds between frames; 0 means every refresh
           frames: 0, // the counters below are reset by whoever reads them
           work: 0,
@@ -123,6 +161,9 @@
           pending.add(handle);
           function attempt(now) {
             if (!pending.has(handle)) return;
+            const tick = now - lastTick;
+            lastTick = now;
+            if (tick > 2 && tick < 50) state.refresh = state.refresh ? state.refresh * 0.95 + tick * 0.05 : tick;
             if (state.minGap && now - lastRun < state.minGap) {
               native(attempt);
               return;
@@ -158,7 +199,8 @@
       // and processor, and the game stutters if it runs flat out. Three things can be turned
       // down:
       //
-      //   Frame rate  Held to 60 a second by the pacing code above.
+      //   Frame rate  Held to every other screen refresh by the pacing code above: 60 a
+      //               second on a 120 Hz screen, 45 on a 90 Hz one.
       //   Resolution  The stage is laid out smaller than the window and stretched back with a
       //               CSS transform; the game sizes its canvas from the stage, so it never
       //               needs to know. The limit is in pixels along the short side of the screen.
@@ -191,7 +233,7 @@
           (window.starwardenNotes = window.starwardenNotes || []).push(text);
         }
         function describe() {
-          return (limit === Infinity ? "full" : limit) + (lite ? " lite" : "") + (cap ? " 60fps" : "");
+          return (limit === Infinity ? "full" : limit) + (lite ? " lite" : "") + (cap ? " capped" : "");
         }
         try {
           if (params.get("quality") === "reset") localStorage.removeItem(KEY);
@@ -299,7 +341,7 @@
               cap = true;
               apply();
               save();
-              note("game code used " + (load * 100).toFixed(0) + "% of the time at " + fps.toFixed(0) + " fps: capped to 60");
+              note("game code used " + (load * 100).toFixed(0) + "% of the time at " + fps.toFixed(0) + " fps: capped to every other refresh");
               skip = 1;
               slow = 0;
               return;
@@ -342,7 +384,7 @@
               " ms longest, " + (load * 100).toFixed(0) + "% of the time\n" +
               "canvas " + canvas.width + "x" + canvas.height + "   page " + innerWidth + "x" + innerHeight +
               " @" + (devicePixelRatio || 1).toFixed(2) + "\n" +
-              "gpu " + gpu + "\n" +
+              "gpu " + gpu + "   screen " + (pacing.refresh ? 1000 / pacing.refresh : 0).toFixed(0) + " Hz\n" +
               "now " + describe() + "\n" +
               (window.starwardenNotes || []).slice(-3).join("; ");
           }
