@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::consts::*;
 use crate::enemies::{EShot, Enemy};
+use crate::fx::Glow;
 use crate::input::PlayerInput;
 use crate::meshes::Art;
 use crate::player::Player;
@@ -53,8 +54,11 @@ pub fn fire_weapons(
             GameEntity,
             Pos(pos.0 + Vec2::new(p.facing * (26.0 + LASER_HALF_LEN), -1.0)),
             Vel(Vec2::new(p.facing * LASER_SPEED + vel.0.x, 0.0)),
-            Sprite::from_color(col(color), Vec2::new(LASER_HALF_LEN * 2.0, 2.6)),
-            Transform::from_xyz(0.0, 0.0, Z_SHOT),
+            Glow {
+                color,
+                size: Vec2::new(LASER_HALF_LEN * 2.0, 2.6),
+                soft: false,
+            },
         ));
         sfx.write(Sfx::Laser);
     }
@@ -105,13 +109,13 @@ pub fn fire_weapons(
 pub fn update_bolts(
     time: Res<Time>,
     mut commands: Commands,
-    mut bolts: Query<(Entity, &mut Bolt, &Pos, &mut Sprite)>,
+    mut bolts: Query<(Entity, &mut Bolt, &Pos, &mut Glow)>,
     enemies: Query<(Entity, &Pos, &Enemy)>,
     mut dmg: MessageWriter<Damage>,
     mut fx: MessageWriter<Fx>,
 ) {
     let dt = time.delta_secs();
-    for (e, mut b, pos, mut sprite) in &mut bolts {
+    for (e, mut b, pos, mut glow) in &mut bolts {
         b.life -= dt;
         if b.life <= 0.0 {
             commands.entity(e).try_despawn();
@@ -119,7 +123,7 @@ pub fn update_bolts(
         }
         // Fade out towards the end of the bolt's range.
         let a = (b.life / 0.12).min(1.0);
-        sprite.color.set_alpha(a);
+        glow.color.alpha = a;
         for (ee, epos, enemy) in &enemies {
             if enemy.warp > 0.0 {
                 continue;
@@ -172,7 +176,9 @@ pub fn update_missiles(
         let mut dir = vel.0.normalize_or(Vec2::X);
         if let Some((_, tpos, _)) = m.target.and_then(|t| enemies.get(t).ok()) {
             let want = delta(pos.0, tpos.0).normalize_or(dir);
-            let ang = dir.angle_to(want).clamp(-MISSILE_TURN * dt, MISSILE_TURN * dt);
+            let ang = dir
+                .angle_to(want)
+                .clamp(-MISSILE_TURN * dt, MISSILE_TURN * dt);
             dir = Vec2::from_angle(ang).rotate(dir);
         }
         vel.0 = dir * speed;
@@ -184,9 +190,9 @@ pub fn update_missiles(
             fx.write(Fx::new(pos.0 - dir * 9.0, C_AMBER, FxKind::Smoke));
         }
 
-        let hit = enemies.iter().any(|(_, epos, en)| {
-            en.warp <= 0.0 && delta(pos.0, epos.0).length() < en.radius + 9.0
-        });
+        let hit = enemies
+            .iter()
+            .any(|(_, epos, en)| en.warp <= 0.0 && delta(pos.0, epos.0).length() < en.radius + 9.0);
         if hit || m.life <= 0.0 {
             for (ee, epos, en) in &enemies {
                 if en.warp <= 0.0 && delta(pos.0, epos.0).length() < MISSILE_BLAST + en.radius {

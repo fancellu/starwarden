@@ -221,13 +221,26 @@ The other visual pieces:
   frequencies are whole numbers of cycles around the world, so the ground joins up with
   itself at the seam. Colonists and Harvesters call the same function to find the ground.
 - [`src/background.rs`](../src/background.rs): a gradient sky, soft nebula sprites and three
-  layers of stars that scroll at different speeds.
+  layers of stars that scroll at different speeds. Each star layer is baked into one mesh.
 - [`src/fx.rs`](../src/fx.rs): particles and floating score numbers. Other systems request
   an effect by writing an `Fx` message (`Explosion`, `Spark`, `Trail`, `Score(150)`), so
   gameplay code never spawns particles directly.
 - [`src/hud.rs`](../src/hud.rs): score text, banners and touch buttons use Bevy UI. The
   scanner and tractor beams are drawn with gizmos, Bevy's immediate-mode line drawing, since
   they change every frame.
+
+### Why particles are not sprites
+
+Particles, laser bolts and enemy shots are not Bevy sprites. Each is an entity with a `Glow`
+component (colour, size, soft or solid), and one system, `draw_glows`, rebuilds a single mesh
+from all of them every frame using the `GlowQuads` builder in `meshes.rs`.
+
+The reason is performance. Bevy gives every sprite with its own colour or size a separate
+material, so hundreds of particles that fade a little each frame meant hundreds of materials
+and GPU buffers created and thrown away per frame, and one draw call each. Desktop machines
+shrug that off; mid-range phones do not. One mesh means one upload and one draw call however
+many particles there are. If you add a new kind of small glowing thing, give it a `Glow`
+rather than a `Sprite`.
 
 ## Sound without asset files
 
@@ -247,16 +260,20 @@ Almost nothing in the Rust code is platform-specific. The differences are:
 - `Msaa::Off` on the web, because WebGL2 cannot combine it with HDR.
 - `dev.rs` (the self-playing demo) is compiled only on the desktop.
 - `page_zoom` in `input.rs` asks the browser how large the game is drawn.
+- `lite_graphics` in `main.rs` asks the page whether to drop the glow effects.
 
 The web side is [`index.html`](../index.html), which Trunk turns into the deployable site.
 It contains two pieces of JavaScript worth knowing about:
 
 - Browsers refuse to play sound before the user interacts with the page, so a small shim
   resumes audio on the first key press or tap.
-- A frame-rate watchdog lowers the render resolution on devices that cannot keep up. It
-  shrinks the element holding the canvas and stretches it back with a CSS transform, so the
-  game simply sees a smaller window. `page_zoom` exists to keep the touch buttons
-  thumb-sized when that happens.
+- A frame-rate watchdog lowers the graphics quality on devices that cannot keep up. To
+  lower the resolution it shrinks the element holding the canvas and stretches it back with
+  a CSS transform, so the game simply sees a smaller window; `page_zoom` exists to keep the
+  touch buttons thumb-sized when that happens. To drop the glow it sets
+  `window.starwardenLite`, which `apply_graphics_mode` in `main.rs` checks every frame,
+  removing or restoring the camera's HDR and bloom.
+- Adding `?debug=1` to the address shows frame timings on screen.
 
 ## Tests and the demo
 

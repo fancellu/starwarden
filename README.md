@@ -92,17 +92,31 @@ from a sub-folder too.
 The web build uses WebGL2, which every current browser supports. Sound starts after the first
 key press, click or tap, because browsers do not allow audio before that.
 
-### Render resolution on phones
+### Graphics quality on phones
 
-Phones often pair a very dense screen with a modest graphics chip, and drawing every physical
-pixel makes the game stutter. The page therefore watches the frame rate: if it stays below 45
-frames a second, it renders at a lower resolution (1080, 900, 720, 600 or 540 pixels along the
-short side of the screen) and stretches the picture to fit. The setting is remembered in the
-browser for the next visit. If a lower resolution does not raise the frame rate, the change is
-undone.
+Phones often pair a very dense screen with a modest graphics chip, and the game stutters if it
+draws every physical pixel with full glow effects. The page therefore watches the frame rate.
+While it stays below 45 frames a second it tries these steps in turn, keeping each one that
+helps and undoing each one that does not:
 
-To choose it yourself, add `?res=720` (any number) or `?res=full` to the address. That also
-switches the automatic adjustment off for that visit.
+1. Render at 900 pixels along the short side of the screen, stretched to fit.
+2. "Lite" graphics: switch off the HDR and bloom passes that produce the glow.
+3. Render at 720 pixels, then 540.
+
+The result is remembered in the browser for the next visit.
+
+To choose for yourself, add any of these to the address:
+
+| Address ending     | Effect                                                    |
+| ------------------ | --------------------------------------------------------- |
+| `?res=720`         | Fixed resolution (any number, or `full`)                  |
+| `?lite=1`          | Glow effects off (`?lite=0` forces them on)               |
+| `?quality=reset`   | Forget the remembered result and start again from full    |
+| `?debug=1`         | Show frame rate and timings on screen                     |
+
+`res` and `lite` switch the automatic adjustment off for that visit. They can be combined, for
+example `?res=540&lite=1&debug=1`. On the desktop, set the `STARWARDEN_LITE` environment
+variable to see the lite graphics.
 
 ## Deploy to Vercel
 

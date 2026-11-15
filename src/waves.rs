@@ -46,7 +46,10 @@ fn fill_queue(queue: &mut WaveQueue, spec: WaveSpec) {
     queue.0.clear();
     // Harvesters arrive in squads a few seconds apart; the rest are sprinkled in between.
     for i in 0..spec.harvesters {
-        queue.0.push(((i / 4) as f32 * 7.0 + (i % 4) as f32 * 0.25, Kind::Harvester));
+        queue.0.push((
+            (i / 4) as f32 * 7.0 + (i % 4) as f32 * 0.25,
+            Kind::Harvester,
+        ));
     }
     for i in 0..spec.hives {
         queue.0.push((1.5 + i as f32 * 4.0, Kind::Hive));
@@ -118,11 +121,17 @@ pub fn run_waves(
                 let stalkers = enemies.iter().filter(|e| e.kind == Kind::Stalker).count();
                 if game.stalker_timer <= 0.0 && stalkers < 3 && ps.alive {
                     game.stalker_timer = STALKER_EVERY;
-                    let pos = Vec2::new(
-                        wrap(ps.pos.x + rng.sign() * 720.0),
-                        rng.range(-80.0, 200.0),
+                    let pos =
+                        Vec2::new(wrap(ps.pos.x + rng.sign() * 720.0), rng.range(-80.0, 200.0));
+                    spawn_enemy(
+                        &mut commands,
+                        &art,
+                        &mut rng,
+                        Kind::Stalker,
+                        elite,
+                        pos,
+                        true,
                     );
-                    spawn_enemy(&mut commands, &art, &mut rng, Kind::Stalker, elite, pos, true);
                     fx.write(Fx::new(pos, Kind::Stalker.color(elite), FxKind::Warp));
                     sfx.write(Sfx::StalkerWarn);
                 }

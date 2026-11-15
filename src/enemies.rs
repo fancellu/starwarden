@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::colonists::{CState, Colonist};
 use crate::consts::*;
+use crate::fx::Glow;
 use crate::meshes::Art;
 use crate::player::{Player, PlayerState};
 use crate::state::*;
@@ -141,8 +142,11 @@ pub fn spawn_enemy(
             Vel(Vec2::ZERO),
             Mesh2d(mesh.clone()),
             MeshMaterial2d(art.mat.clone()),
-            Transform::from_xyz(0.0, pos.y, Z_ENEMY)
-                .with_scale(Vec3::splat(if warp { 0.0 } else { 1.0 })),
+            Transform::from_xyz(0.0, pos.y, Z_ENEMY).with_scale(Vec3::splat(if warp {
+                0.0
+            } else {
+                1.0
+            })),
         ))
         .id()
 }
@@ -292,10 +296,7 @@ pub fn enemy_ai(
             }
             Kind::Wraith => {
                 let chase = to_player.normalize_or_zero() * 250.0 * sm;
-                let jitter = Vec2::new(
-                    (en.t * 3.7).sin() * 90.0,
-                    (en.t * 6.1).sin() * 170.0,
-                );
+                let jitter = Vec2::new((en.t * 3.7).sin() * 90.0, (en.t * 6.1).sin() * 170.0);
                 let want = chase + jitter;
                 let k = smooth(3.0, dt);
                 vel.0 = vel.0.lerp(want, k);
@@ -359,7 +360,11 @@ pub fn enemy_ai(
                     let speed = speed * sm.min(1.4);
                     // Lead the target a little; Harvesters are sloppier shots.
                     let lead = to_player + ps.vel * (to_player.length() / speed) * 0.6;
-                    let spread = if en.kind == Kind::Harvester { 0.22 } else { 0.08 };
+                    let spread = if en.kind == Kind::Harvester {
+                        0.22
+                    } else {
+                        0.08
+                    };
                     let dir = Vec2::from_angle(rng.range(-spread, spread))
                         .rotate(lead.normalize_or(Vec2::X));
                     commands.spawn((
@@ -367,13 +372,11 @@ pub fn enemy_ai(
                         GameEntity,
                         Pos(pos.0),
                         Vel(dir * speed),
-                        Sprite {
-                            image: art.glow.clone(),
-                            color: col(if en.elite { C_AMBER } else { C_RED }),
-                            custom_size: Some(Vec2::splat(22.0)),
-                            ..default()
+                        Glow {
+                            color: if en.elite { C_AMBER } else { C_RED },
+                            size: Vec2::splat(22.0),
+                            soft: true,
                         },
-                        Transform::from_xyz(0.0, 0.0, Z_SHOT),
                     ));
                     sfx.write(Sfx::EnemyShot);
                 }
@@ -493,7 +496,9 @@ pub fn apply_damage(
                     pos.0 + off,
                     false,
                 );
-                commands.entity(s).insert(Vel(off.normalize_or(Vec2::X) * 260.0));
+                commands
+                    .entity(s)
+                    .insert(Vel(off.normalize_or(Vec2::X) * 260.0));
             }
         }
     }
@@ -517,6 +522,7 @@ mod tests {
         Art {
             mat: Handle::default(),
             glow: Handle::default(),
+            glow_mat: Handle::default(),
             ship: Handle::default(),
             flame: Handle::default(),
             missile: Handle::default(),

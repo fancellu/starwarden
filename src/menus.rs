@@ -43,12 +43,10 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
         children![
             (TitleGlow, line(TITLE, 92.0, C_CYAN)),
             line("DEFEND THE COLONY", 22.0, C_MAGENTA),
-            (
-                Node {
-                    height: px(18),
-                    ..default()
-                },
-            ),
+            (Node {
+                height: px(18),
+                ..default()
+            },),
             line(
                 format!(
                     "{NAME_HARVESTER}S ABDUCT COLONISTS - SHOOT THEM AND CATCH WHO FALLS\n\
@@ -59,12 +57,10 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
                 15.0,
                 dim,
             ),
-            (
-                Node {
-                    height: px(6),
-                    ..default()
-                },
-            ),
+            (Node {
+                height: px(6),
+                ..default()
+            },),
             line(
                 "KEYS   ARROWS/WASD MOVE - SPACE LASER - SHIFT MISSILE - ENTER BOMB - P PAUSE\n\
                  PAD    STICK MOVE - A LASER - X MISSILE - B BOMB - START PAUSE\n\
@@ -72,13 +68,14 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
                 14.0,
                 dim,
             ),
+            (Node {
+                height: px(18),
+                ..default()
+            },),
             (
-                Node {
-                    height: px(18),
-                    ..default()
-                },
+                Blink,
+                line("PRESS SPACE, (A) OR TAP TO START", 24.0, C_WHITE)
             ),
-            (Blink, line("PRESS SPACE, (A) OR TAP TO START", 24.0, C_WHITE)),
             line(format!("BEST {:07}", game.high), 16.0, C_AMBER),
             (
                 Node {
@@ -99,7 +96,10 @@ pub fn setup_paused(mut commands: Commands) {
         BackgroundColor(Color::linear_rgba(0.0, 0.0, 0.02, 0.55)),
         children![
             line("PAUSED", 64.0, C_CYAN),
-            (Blink, line("PRESS P, START OR TAP TO RESUME", 20.0, C_WHITE)),
+            (
+                Blink,
+                line("PRESS P, START OR TAP TO RESUME", 20.0, C_WHITE)
+            ),
         ],
     ));
 }
@@ -117,18 +117,15 @@ pub fn setup_game_over(mut commands: Commands, game: Res<Game>) {
                 26.0,
                 C_WHITE
             ),
-            line(
-                if best { "NEW BEST SCORE" } else { "" },
-                20.0,
-                C_AMBER
-            ),
+            line(if best { "NEW BEST SCORE" } else { "" }, 20.0, C_AMBER),
+            (Node {
+                height: px(14),
+                ..default()
+            },),
             (
-                Node {
-                    height: px(14),
-                    ..default()
-                },
+                Blink,
+                line("PRESS SPACE, (A) OR TAP TO PLAY AGAIN", 22.0, C_WHITE)
             ),
-            (Blink, line("PRESS SPACE, (A) OR TAP TO PLAY AGAIN", 22.0, C_WHITE)),
         ],
     ));
 }

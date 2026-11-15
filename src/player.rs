@@ -71,7 +71,13 @@ pub fn player_control(
     input: Res<PlayerInput>,
     game: Res<Game>,
     mut ps: ResMut<PlayerState>,
-    mut q: Query<(&mut Player, &mut Pos, &mut Vel, &mut Transform, &mut Visibility)>,
+    mut q: Query<(
+        &mut Player,
+        &mut Pos,
+        &mut Vel,
+        &mut Transform,
+        &mut Visibility,
+    )>,
     mut flame: Query<&mut Transform, (With<Flame>, Without<Player>)>,
     mut fx: MessageWriter<Fx>,
 ) {

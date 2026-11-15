@@ -96,36 +96,59 @@
         events.forEach((e) => document.addEventListener(e, resume));
       })();
 
-      // Render resolution. Phones often have very dense screens and modest graphics chips, and
-      // drawing every physical pixel makes the game stutter there. To draw fewer pixels, the
-      // stage is laid out smaller than the window and stretched back with a CSS transform; the
-      // game sizes its canvas from the stage, so it never needs to know.
+      // Graphics quality. Phones often pair a very dense screen with a modest graphics chip,
+      // and the game stutters if it draws every physical pixel with full glow effects. Two
+      // things can be turned down:
       //
-      // The limit is the number of pixels along the short side of the screen. It starts at the
-      // screen's own resolution and steps down while the frame rate stays low. The result is
-      // remembered for the next visit. Override with ?res=720 (any number) or ?res=full.
+      //   Resolution  The stage is laid out smaller than the window and stretched back with a
+      //               CSS transform; the game sizes its canvas from the stage, so it never
+      //               needs to know. The limit is in pixels along the short side of the screen.
+      //   Glow        The game checks window.starwardenLite and, when it is set, drops its HDR
+      //               and bloom passes, whose cost does not shrink with resolution.
+      //
+      // Both start at full quality. While the frame rate stays low, a watchdog tries the steps
+      // in STEPS one at a time, keeps each one that helps and undoes each one that does not.
+      // The result is remembered for the next visit.
+      //
+      // Override with ?res=720 (any number) or ?res=full, and ?lite=1 or ?lite=0. Either one
+      // switches the watchdog off for that visit. ?quality=reset forgets the saved result.
       (function () {
-        const STEPS = [1080, 900, 720, 600, 540];
-        const KEY = "starwarden.res";
-        const param = new URLSearchParams(location.search).get("res");
+        const STEPS = [{ res: 900 }, { lite: true }, { res: 720 }, { res: 540 }];
+        const KEY = "starwarden.quality";
+        const SLOW_FPS = 45;
+        const params = new URLSearchParams(location.search);
         let limit = Infinity;
+        let lite = false;
         let adaptive = true;
-        if (param === "full") {
-          adaptive = false;
-        } else if (Number(param) >= 240) {
-          limit = Number(param);
-          adaptive = false;
-        } else {
-          try {
-            const saved = Number(localStorage.getItem(KEY));
-            if (saved >= 240) limit = saved;
-          } catch (e) {}
+
+        function note(text) {
+          (window.starwardenNotes = window.starwardenNotes || []).push(text);
         }
+        function describe() {
+          return (limit === Infinity ? "full" : limit) + (lite ? " lite" : "");
+        }
+        try {
+          if (params.get("quality") === "reset") localStorage.removeItem(KEY);
+          const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+          if (saved.res >= 240) limit = saved.res;
+          lite = saved.lite === true;
+        } catch (e) {}
+        const res = params.get("res");
+        if (res === "full" || Number(res) >= 240) {
+          limit = res === "full" ? Infinity : Number(res);
+          adaptive = false;
+        }
+        if (params.get("lite") === "1" || params.get("lite") === "0") {
+          lite = params.get("lite") === "1";
+          adaptive = false;
+        }
+        note((adaptive ? "auto" : "fixed") + ", starting at " + describe());
 
         function nativeShort() {
           return Math.min(innerWidth, innerHeight) * (devicePixelRatio || 1);
         }
         function apply() {
+          window.starwardenLite = lite ? {} : undefined;
           const stage = document.getElementById("stage");
           if (!stage) return;
           const k = Math.max(1, nativeShort() / limit);
@@ -133,30 +156,43 @@
           stage.style.height = innerHeight / k + "px";
           stage.style.transform = k > 1 ? "scale(" + k + ")" : "";
         }
-        function setLimit(value, remember) {
-          limit = value;
-          apply();
-          if (remember) {
-            try {
-              if (value === Infinity) localStorage.removeItem(KEY);
-              else localStorage.setItem(KEY, String(value));
-            } catch (e) {}
-          }
+        function save() {
+          try {
+            localStorage.setItem(KEY, JSON.stringify({ res: limit === Infinity ? 0 : limit, lite: lite }));
+          } catch (e) {}
         }
+        apply();
         window.addEventListener("resize", apply);
         document.addEventListener("DOMContentLoaded", apply);
 
         if (!adaptive) return;
-        // Frame-rate watchdog: two slow 2-second windows in a row lower the resolution a step.
-        // If a step does not help (the browser is capping the frame rate, or the processor is
-        // the limit, not the pixels) it is undone and the watchdog stops.
-        const SLOW_FPS = 45;
         window.addEventListener("TrunkApplicationStarted", () => {
           let frames = 0;
           let windowStart = 0;
-          let skip = 2; // windows to ignore: start-up, and after each change
+          let skip = 2; // 2-second windows to ignore: start-up, and after each change
           let slow = 0;
-          let before = null; // { limit, fps } from before the last step down
+          let next = 0; // index into STEPS
+          let trial = null; // { limit, lite, fps } from before the step being tried
+
+          // Applies the next step that would change anything; false when none are left.
+          function tryNextStep(fps) {
+            while (next < STEPS.length) {
+              const step = STEPS[next++];
+              const current = Math.min(limit, nativeShort());
+              if (step.res && step.res > current * 0.85) continue;
+              if (step.lite && lite) continue;
+              trial = { limit: limit, lite: lite, fps: fps };
+              if (step.res) limit = step.res;
+              if (step.lite) lite = true;
+              apply();
+              save();
+              note("trying " + describe());
+              skip = 1;
+              return true;
+            }
+            return false;
+          }
+
           function tick(now) {
             if (!adaptive) return;
             requestAnimationFrame(tick);
@@ -176,26 +212,81 @@
               skip--;
               return;
             }
-            if (before) {
+            if (trial) {
+              const before = trial;
+              trial = null;
               if (fps < before.fps * 1.1) {
-                setLimit(before.limit, true);
-                adaptive = false;
+                // No real gain: put it back and move on to the next kind of step.
+                limit = before.limit;
+                lite = before.lite;
+                apply();
+                save();
+                note("no gain (" + before.fps.toFixed(0) + " to " + fps.toFixed(0) + " fps), back to " + describe());
+                if (!tryNextStep(before.fps)) adaptive = false;
                 return;
               }
-              before = null;
+              note("kept " + describe() + " (" + before.fps.toFixed(0) + " to " + fps.toFixed(0) + " fps)");
             }
             slow = fps < SLOW_FPS ? slow + 1 : 0;
             if (slow < 2) return;
-            const current = Math.min(limit, nativeShort());
-            // Take a step big enough to matter: at least a fifth fewer pixels along each side.
-            const next = STEPS.find((s) => s <= current * 0.8);
-            if (!next) return;
-            before = { limit: limit, fps: fps };
-            setLimit(next, true);
             slow = 0;
-            skip = 1;
+            if (!tryNextStep(fps)) adaptive = false;
           }
           requestAnimationFrame(tick);
+        });
+      })();
+
+      // Diagnostics: add ?debug=1 to the address to show frame timings on screen.
+      //   fps    frames drawn per second, with the longest gap between two frames
+      //   work   time the game's own code took per frame (average and longest)
+      // If "work" is close to the gap between frames, the processor is the limit. If it is
+      // much smaller, the graphics chip is.
+      (function () {
+        if (!new URLSearchParams(location.search).has("debug")) return;
+        const native = window.requestAnimationFrame.bind(window);
+        let frames = 0, last = 0, maxGap = 0, work = 0, maxWork = 0;
+        window.requestAnimationFrame = function (callback) {
+          return native(function (now) {
+            const start = performance.now();
+            if (last) maxGap = Math.max(maxGap, now - last);
+            last = now;
+            frames++;
+            try {
+              callback(now);
+            } finally {
+              const took = performance.now() - start;
+              work += took;
+              maxWork = Math.max(maxWork, took);
+            }
+          });
+        };
+        let gpu = "unknown";
+        try {
+          const gl = document.createElement("canvas").getContext("webgl2");
+          const ext = gl.getExtension("WEBGL_debug_renderer_info");
+          gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+        } catch (e) {}
+        document.addEventListener("DOMContentLoaded", () => {
+          const box = document.createElement("pre");
+          box.style.cssText =
+            "position:fixed;left:50%;top:22%;transform:translateX(-50%);margin:0;padding:6px 10px;" +
+            "background:rgba(0,0,0,.7);color:#9f9;font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;" +
+            "pointer-events:none;z-index:10;white-space:pre-wrap;max-width:92vw";
+          document.body.appendChild(box);
+          let since = performance.now();
+          setInterval(() => {
+            const now = performance.now();
+            const secs = (now - since) / 1000;
+            const canvas = document.getElementById("game");
+            const notes = (window.starwardenNotes || []).slice(-3).join("; ");
+            box.textContent =
+              "fps " + (frames / secs).toFixed(0) + "   longest gap " + maxGap.toFixed(0) + " ms\n" +
+              "work " + (frames ? work / frames : 0).toFixed(1) + " ms avg, " + maxWork.toFixed(0) + " ms longest\n" +
+              "canvas " + canvas.width + "x" + canvas.height + "   page " + innerWidth + "x" + innerHeight +
+              " @" + (devicePixelRatio || 1).toFixed(2) + "\n" +
+              "gpu " + gpu + "\n" + notes;
+            frames = 0; maxGap = 0; work = 0; maxWork = 0; since = now;
+          }, 1000);
         });
       })();
 

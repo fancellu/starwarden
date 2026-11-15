@@ -89,6 +89,7 @@ fn main() {
             audio::setup_audio,
             hud::setup_hud,
             hud::setup_gizmos,
+            fx::setup_glow_batch,
         ),
     );
 
@@ -115,7 +116,11 @@ fn main() {
     .add_systems(
         Update,
         (
-            (player::player_control, weapons::fire_weapons, waves::run_waves)
+            (
+                player::player_control,
+                weapons::fire_weapons,
+                waves::run_waves,
+            )
                 .chain()
                 .run_if(playing),
             (enemies::enemy_ai, colonists::update_colonists)
@@ -127,9 +132,7 @@ fn main() {
     )
     .add_systems(
         Update,
-        world::integrate
-            .run_if(simulating)
-            .in_set(Step::Move),
+        world::integrate.run_if(simulating).in_set(Step::Move),
     )
     .add_systems(
         Update,
@@ -168,7 +171,9 @@ fn main() {
                 .chain()
                 .run_if(simulating),
             world::sync_transforms,
+            fx::draw_glows,
             world::camera_shake,
+            apply_graphics_mode,
             terrain::update_terrain,
             background::update_background,
             hud::update_ui_scale,
@@ -197,13 +202,23 @@ fn simulating(state: Res<State<GameState>>) -> bool {
     matches!(state.get(), GameState::Playing | GameState::GameOver)
 }
 
+/// "Lite" graphics: no HDR, bloom or tonemapping, for devices that cannot afford them.
+/// On the web the page sets `window.starwardenLite` (see `index.html`), and may do so while
+/// the game is running. On the desktop set the `STARWARDEN_LITE` environment variable.
+fn lite_graphics() -> bool {
+    #[cfg(target_arch = "wasm32")]
+    {
+        web_sys::window().is_some_and(|w| w.get("starwardenLite").is_some())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::env::var("STARWARDEN_LITE").is_ok()
+    }
+}
+
 fn setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
-        Hdr,
-        // MSAA and HDR do not mix on WebGL2; the bloom hides most of the aliasing anyway.
-        #[cfg(target_arch = "wasm32")]
-        Msaa::Off,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::AutoMin {
                 min_width: VIEW_MIN_W,
@@ -211,11 +226,40 @@ fn setup_camera(mut commands: Commands) {
             },
             ..OrthographicProjection::default_2d()
         }),
-        Tonemapping::TonyMcMapface,
-        Bloom {
-            intensity: 0.22,
-            ..Bloom::default()
-        },
-        DebandDither::Enabled,
+        // MSAA and HDR do not mix on WebGL2; the bloom hides most of the aliasing anyway.
+        #[cfg(target_arch = "wasm32")]
+        Msaa::Off,
     ));
+}
+
+/// Adds or removes the camera's glow effects when the graphics mode changes.
+fn apply_graphics_mode(
+    mut commands: Commands,
+    camera: Query<Entity, With<Camera2d>>,
+    mut current: Local<Option<bool>>,
+) {
+    let lite = lite_graphics();
+    if *current == Some(lite) {
+        return;
+    }
+    let Ok(camera) = camera.single() else {
+        return;
+    };
+    *current = Some(lite);
+    let mut camera = commands.entity(camera);
+    if lite {
+        camera
+            .remove::<(Hdr, Bloom, DebandDither)>()
+            .insert(Tonemapping::None);
+    } else {
+        camera.insert((
+            Hdr,
+            Tonemapping::TonyMcMapface,
+            Bloom {
+                intensity: 0.22,
+                ..Bloom::default()
+            },
+            DebandDither::Enabled,
+        ));
+    }
 }

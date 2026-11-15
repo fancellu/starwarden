@@ -50,7 +50,10 @@ impl Noise {
         Self { seed, lp: 0.0 }
     }
     fn white(&mut self) -> f32 {
-        self.seed = self.seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
         (self.seed >> 8) as f32 / (1u32 << 23) as f32 - 1.0
     }
     /// White noise through a one-pole low-pass; `k` in `(0, 1]`, smaller is darker.
@@ -132,7 +135,11 @@ fn synth(sfx: Sfx) -> Vec<f32> {
         Sfx::Alarm => {
             let mut a = Osc::default();
             render(0.62, |t, u| {
-                let f = if ((t * 9.0) as u32).is_multiple_of(2) { 960.0 } else { 720.0 };
+                let f = if ((t * 9.0) as u32).is_multiple_of(2) {
+                    960.0
+                } else {
+                    720.0
+                };
                 a.square(f) * 0.28 * (1.0 - u * 0.5)
             })
         }
@@ -167,7 +174,11 @@ fn synth(sfx: Sfx) -> Vec<f32> {
         Sfx::StalkerWarn => {
             let mut a = Osc::default();
             render(0.5, |t, u| {
-                let f = if ((t * 22.0) as u32).is_multiple_of(2) { 1250.0 } else { 1650.0 };
+                let f = if ((t * 22.0) as u32).is_multiple_of(2) {
+                    1250.0
+                } else {
+                    1650.0
+                };
                 a.tri(f) * 0.5 * (1.0 - u * 0.6)
             })
         }
@@ -183,7 +194,9 @@ fn synth(sfx: Sfx) -> Vec<f32> {
         Sfx::WaveStart => arpeggio(&[330.0, 440.0, 554.0, 660.0, 880.0], 0.11, 0.35),
         Sfx::Blip => {
             let mut a = Osc::default();
-            render(0.09, |_, u| a.sine(lerp(900.0, 1300.0, u)) * 0.5 * (1.0 - u))
+            render(0.09, |_, u| {
+                a.sine(lerp(900.0, 1300.0, u)) * 0.5 * (1.0 - u)
+            })
         }
         Sfx::ExtraLife => arpeggio(&[784.0, 988.0, 1175.0, 1568.0, 1976.0, 2349.0], 0.07, 0.15),
         Sfx::EnemyShot => {

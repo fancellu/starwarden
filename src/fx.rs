@@ -2,8 +2,10 @@
 
 use bevy::prelude::*;
 
+use bevy::camera::visibility::NoFrustumCulling;
+
 use crate::consts::*;
-use crate::meshes::Art;
+use crate::meshes::{Art, GlowQuads};
 use crate::state::*;
 use crate::world::*;
 
@@ -19,6 +21,67 @@ pub struct Particle {
     pub gravity: f32,
 }
 
+/// A glowing dot or solid bar at the entity's [`Pos`]. All of them are drawn together as one
+/// mesh by [`draw_glows`].
+#[derive(Component)]
+pub struct Glow {
+    pub color: LinearRgba,
+    pub size: Vec2,
+    /// Round and soft-edged if true, a solid rectangle if false.
+    pub soft: bool,
+}
+
+/// The single entity whose mesh holds every [`Glow`] currently on screen.
+#[derive(Component)]
+pub struct GlowBatch;
+
+pub fn setup_glow_batch(mut commands: Commands, art: Res<Art>, mut meshes: ResMut<Assets<Mesh>>) {
+    // Start with one invisible quad: the renderer warns about meshes with no vertices.
+    let mut quads = GlowQuads::default();
+    quads.push(Vec2::ZERO, Vec2::ZERO, LinearRgba::NONE, true);
+    commands.spawn((
+        GlowBatch,
+        Mesh2d(meshes.add(quads.build())),
+        MeshMaterial2d(art.glow_mat.clone()),
+        Transform::from_xyz(0.0, 0.0, Z_PARTICLE),
+        // The mesh changes every frame, so its bounds are never up to date.
+        NoFrustumCulling,
+        Visibility::Hidden,
+    ));
+}
+
+/// Rebuilds the batch mesh from every glow in view.
+pub fn draw_glows(
+    cam: Res<GameCam>,
+    view: Res<View>,
+    glows: Query<(&Pos, &Glow)>,
+    mut batch: Query<(&Mesh2d, &mut Visibility), With<GlowBatch>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let Ok((mesh, mut vis)) = batch.single_mut() else {
+        return;
+    };
+    let mut quads = GlowQuads::default();
+    for (pos, glow) in &glows {
+        let x = wrap_delta(pos.0.x - cam.x);
+        if x.abs() < view.w * 0.5 + glow.size.x && glow.color.alpha > 0.003 {
+            quads.push(Vec2::new(x, pos.0.y), glow.size, glow.color, glow.soft);
+        }
+    }
+    if quads.is_empty() {
+        if *vis != Visibility::Hidden {
+            *vis = Visibility::Hidden;
+        }
+        return;
+    }
+    if let Some(mut m) = meshes.get_mut(&mesh.0) {
+        quads.write_to(&mut m);
+    }
+    if *vis != Visibility::Inherited {
+        *vis = Visibility::Inherited;
+    }
+}
+
 #[derive(Component)]
 pub struct Popup {
     pub life: f32,
@@ -32,14 +95,7 @@ struct Spec {
     gravity: f32,
 }
 
-fn emit(
-    commands: &mut Commands,
-    art: &Art,
-    pos: Vec2,
-    vel: Vec2,
-    color: LinearRgba,
-    spec: Spec,
-) {
+fn emit(commands: &mut Commands, pos: Vec2, vel: Vec2, color: LinearRgba, spec: Spec) {
     commands.spawn((
         Particle {
             life: spec.life,
@@ -53,19 +109,16 @@ fn emit(
         GameEntity,
         Pos(pos),
         Vel(vel),
-        Sprite {
-            image: art.glow.clone(),
-            color: col(color),
-            custom_size: Some(Vec2::splat(spec.size)),
-            ..default()
+        Glow {
+            color,
+            size: Vec2::splat(spec.size),
+            soft: true,
         },
-        Transform::from_xyz(0.0, pos.y, Z_PARTICLE),
     ));
 }
 
 pub fn spawn_fx(
     mut commands: Commands,
-    art: Res<Art>,
     mut rng: ResMut<Rng>,
     mut reader: MessageReader<Fx>,
     particles: Query<(), With<Particle>>,
@@ -77,13 +130,16 @@ pub fn spawn_fx(
         match f.kind {
             FxKind::Explosion | FxKind::BigExplosion => {
                 let big = matches!(f.kind, FxKind::BigExplosion);
-                let (n, speed, life) = if big { (90, 520.0, 1.5) } else { (26, 330.0, 0.75) };
+                let (n, speed, life) = if big {
+                    (90, 520.0, 1.5)
+                } else {
+                    (26, 330.0, 0.75)
+                };
                 for i in 0..n {
                     let v = rng.dir() * rng.range(0.15, 1.0) * speed;
                     let c = if i % 3 == 0 { white } else { f.color };
                     emit(
                         &mut commands,
-                        &art,
                         f.pos,
                         v,
                         c,
@@ -99,7 +155,6 @@ pub fn spawn_fx(
                 // A quick bright core flash.
                 emit(
                     &mut commands,
-                    &art,
                     f.pos,
                     Vec2::ZERO,
                     with_alpha(f.color.mix(&white, 0.5), if big { 0.9 } else { 0.55 }),
@@ -117,7 +172,6 @@ pub fn spawn_fx(
                 for _ in 0..5 {
                     emit(
                         &mut commands,
-                        &art,
                         f.pos,
                         rng.dir() * rng.range(80.0, 260.0),
                         f.color,
@@ -138,7 +192,6 @@ pub fn spawn_fx(
                     let r = rng.range(50.0, 80.0);
                     emit(
                         &mut commands,
-                        &art,
                         f.pos + d * r,
                         -d * r / 0.6,
                         f.color,
@@ -157,7 +210,6 @@ pub fn spawn_fx(
                     let d = Vec2::from_angle(i as f32 / 20.0 * std::f32::consts::TAU);
                     emit(
                         &mut commands,
-                        &art,
                         f.pos,
                         d * 230.0,
                         f.color,
@@ -175,7 +227,6 @@ pub fn spawn_fx(
                 if budget > 200 {
                     emit(
                         &mut commands,
-                        &art,
                         f.pos + Vec2::new(0.0, rng.range(-2.0, 2.0)),
                         v + rng.dir() * 25.0,
                         f.color,
@@ -194,7 +245,6 @@ pub fn spawn_fx(
                 if budget > 100 {
                     emit(
                         &mut commands,
-                        &art,
                         f.pos,
                         rng.dir() * 18.0,
                         with_alpha(f.color, 0.6),
@@ -215,7 +265,6 @@ pub fn spawn_fx(
                     let c = if i % 2 == 0 { f.color } else { C_CYAN };
                     emit(
                         &mut commands,
-                        &art,
                         f.pos,
                         v,
                         c,
@@ -251,10 +300,10 @@ pub fn spawn_fx(
 pub fn update_particles(
     time: Res<Time>,
     mut commands: Commands,
-    mut q: Query<(Entity, &mut Particle, &mut Vel, &mut Sprite)>,
+    mut q: Query<(Entity, &mut Particle, &mut Vel, &mut Glow)>,
 ) {
     let dt = time.delta_secs();
-    for (e, mut p, mut vel, mut sprite) in &mut q {
+    for (e, mut p, mut vel, mut glow) in &mut q {
         p.life -= dt;
         if p.life <= 0.0 {
             commands.entity(e).try_despawn();
@@ -263,9 +312,8 @@ pub fn update_particles(
         let k = p.life / p.max;
         vel.0 *= (-p.drag * dt).exp();
         vel.0.y += p.gravity * dt;
-        sprite.color = col(with_alpha(p.color, p.color.alpha * k));
-        let s = p.size * (p.grow + (1.0 - p.grow) * k);
-        sprite.custom_size = Some(Vec2::splat(s));
+        glow.color = with_alpha(p.color, p.color.alpha * k);
+        glow.size = Vec2::splat(p.size * (p.grow + (1.0 - p.grow) * k));
     }
 }
 

@@ -1,9 +1,10 @@
 //! Sky gradient, nebula clouds and a three-layer parallax starfield.
 
+use bevy::camera::visibility::NoFrustumCulling;
 use bevy::prelude::*;
 
 use crate::consts::*;
-use crate::meshes::{Art, Shape};
+use crate::meshes::{Art, GlowQuads, Shape};
 use crate::state::{Game, Phase};
 use crate::world::*;
 
@@ -15,10 +16,13 @@ pub struct Parallax {
     pub span: f32,
 }
 
+/// One copy of a baked star layer. The layer repeats every [`SPAN`] units.
 #[derive(Component)]
-pub struct Star {
-    pub phase: f32,
-    pub base: LinearRgba,
+pub struct StarLayer {
+    /// Fraction of the camera speed this layer scrolls at.
+    factor: f32,
+    /// Which of the two side-by-side copies this is (-1 or 0).
+    copy: f32,
 }
 
 #[derive(Component)]
@@ -49,9 +53,18 @@ pub fn setup_background(
     let low = rgb(0.018, 0.004, 0.034);
     let mut s = Shape::default();
     let w = 4000.0;
-    s.quad([(-w, 1500.0), (w, 1500.0), (w, 0.0), (-w, 0.0)], [top, top, mid, mid]);
-    s.quad([(-w, 0.0), (w, 0.0), (w, -340.0), (-w, -340.0)], [mid, mid, low, low]);
-    s.quad([(-w, -340.0), (w, -340.0), (w, -1500.0), (-w, -1500.0)], [low, low, top, top]);
+    s.quad(
+        [(-w, 1500.0), (w, 1500.0), (w, 0.0), (-w, 0.0)],
+        [top, top, mid, mid],
+    );
+    s.quad(
+        [(-w, 0.0), (w, 0.0), (w, -340.0), (-w, -340.0)],
+        [mid, mid, low, low],
+    );
+    s.quad(
+        [(-w, -340.0), (w, -340.0), (w, -1500.0), (-w, -1500.0)],
+        [low, low, top, top],
+    );
     commands.spawn((
         Sky,
         Mesh2d(meshes.add(s.build())),
@@ -94,6 +107,9 @@ pub fn setup_background(
     .into_iter()
     .enumerate()
     {
+        // Each layer is baked into one mesh. Two copies side by side cover the screen as the
+        // layer scrolls.
+        let mut quads = GlowQuads::default();
         for _ in 0..count {
             let tint = match rng.index(5) {
                 0 => rgb(0.6, 0.8, 1.0),
@@ -102,23 +118,21 @@ pub fn setup_background(
             };
             let b = bright * rng.range(0.5, 1.0);
             let base = rgb(tint.red * b, tint.green * b, tint.blue * b);
+            quads.push(
+                Vec2::new(rng.range(0.0, SPAN), rng.range(-380.0, 700.0)),
+                Vec2::splat(size * rng.range(0.6, 1.0)),
+                base,
+                true,
+            );
+        }
+        let mesh = meshes.add(quads.build());
+        for copy in [-1.0, 0.0] {
             commands.spawn((
-                Star {
-                    phase: rng.range(0.0, 100.0),
-                    base,
-                },
-                Parallax {
-                    factor,
-                    x: rng.range(0.0, SPAN),
-                    span: SPAN,
-                },
-                Sprite {
-                    image: art.glow.clone(),
-                    color: col(base),
-                    custom_size: Some(Vec2::splat(size * rng.range(0.6, 1.0))),
-                    ..default()
-                },
-                Transform::from_xyz(0.0, rng.range(-380.0, 700.0), Z_STARS + layer as f32),
+                StarLayer { factor, copy },
+                Mesh2d(mesh.clone()),
+                MeshMaterial2d(art.glow_mat.clone()),
+                Transform::from_xyz(0.0, 0.0, Z_STARS + layer as f32),
+                NoFrustumCulling,
             ));
         }
     }
@@ -130,9 +144,9 @@ pub fn update_background(
     game: Res<Game>,
     mut blend: ResMut<VoidBlend>,
     mut scroll: Local<(f32, f32)>,
-    mut layers: Query<(&Parallax, &mut Transform)>,
-    mut stars: Query<(&Star, &mut Sprite), Without<Nebula>>,
-    mut nebulae: Query<(&Nebula, &mut Sprite), Without<Star>>,
+    mut layers: Query<(&Parallax, &mut Transform), Without<StarLayer>>,
+    mut stars: Query<(&StarLayer, &mut Transform)>,
+    mut nebulae: Query<(&Nebula, &mut Sprite)>,
     sky: Query<&MeshMaterial2d<ColorMaterial>, With<Sky>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
@@ -147,11 +161,12 @@ pub fn update_background(
     let travel = *total + t * 14.0;
 
     for (p, mut tf) in &mut layers {
-        tf.translation.x = (p.x - travel * p.factor + p.span * 0.5).rem_euclid(p.span) - p.span * 0.5;
+        tf.translation.x =
+            (p.x - travel * p.factor + p.span * 0.5).rem_euclid(p.span) - p.span * 0.5;
     }
-    for (s, mut sprite) in &mut stars {
-        let tw = 0.75 + 0.25 * (t * 2.0 + s.phase).sin();
-        sprite.color = col(rgb(s.base.red * tw, s.base.green * tw, s.base.blue * tw));
+    for (s, mut tf) in &mut stars {
+        let left = (-travel * s.factor).rem_euclid(SPAN) - SPAN * 0.5;
+        tf.translation.x = left + s.copy * SPAN;
     }
 
     let target = if game.phase == Phase::Void { 1.0 } else { 0.0 };

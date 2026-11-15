@@ -225,7 +225,12 @@ mod tests {
 
     #[test]
     fn touch_buttons_fit_on_small_and_large_screens() {
-        for (w, h) in [(360.0, 640.0), (640.0, 360.0), (1280.0, 720.0), (2560.0, 1440.0)] {
+        for (w, h) in [
+            (360.0, 640.0),
+            (640.0, 360.0),
+            (1280.0, 720.0),
+            (2560.0, 1440.0),
+        ] {
             let l = touch_layout(w, h, 1.0);
             for (c, r) in [l.fire, l.missile, l.bomb, l.pause] {
                 assert!(c.x - r >= 0.0 && c.x + r <= w, "{w}x{h}: {c} r{r}");

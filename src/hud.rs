@@ -183,11 +183,21 @@ pub fn update_hud(
     mut status: Query<&mut Text, (With<StatusText>, Without<ScoreText>)>,
     mut banner_text: Query<
         (&mut Text, &mut TextColor),
-        (With<BannerText>, Without<ScoreText>, Without<StatusText>, Without<BannerSub>),
+        (
+            With<BannerText>,
+            Without<ScoreText>,
+            Without<StatusText>,
+            Without<BannerSub>,
+        ),
     >,
     mut banner_sub: Query<
         (&mut Text, &mut TextColor),
-        (With<BannerSub>, Without<ScoreText>, Without<StatusText>, Without<BannerText>),
+        (
+            With<BannerSub>,
+            Without<ScoreText>,
+            Without<StatusText>,
+            Without<BannerText>,
+        ),
     >,
     mut flash_node: Query<&mut BackgroundColor, With<FlashNode>>,
 ) {
@@ -205,7 +215,10 @@ pub fn update_hud(
     }
 
     if let Ok(mut t) = score.single_mut() {
-        set_text(&mut t, format!("SCORE {:07}\nBEST  {:07}", game.score, game.high));
+        set_text(
+            &mut t,
+            format!("SCORE {:07}\nBEST  {:07}", game.score, game.high),
+        );
     }
     if let Ok(mut t) = status.single_mut() {
         let people = if game.phase == Phase::Planet {
@@ -274,8 +287,16 @@ pub fn draw_overlays(
                 let color = col(with_alpha(C_GREEN, 0.35 + 0.4 * a));
                 let top = screen(hpos.0) + Vec2::new(0.0, -10.0);
                 let bottom = screen(cpos.0);
-                gizmos.line_2d(top + Vec2::new(-7.0, 0.0), bottom + Vec2::new(-3.0, 0.0), color);
-                gizmos.line_2d(top + Vec2::new(7.0, 0.0), bottom + Vec2::new(3.0, 0.0), color);
+                gizmos.line_2d(
+                    top + Vec2::new(-7.0, 0.0),
+                    bottom + Vec2::new(-3.0, 0.0),
+                    color,
+                );
+                gizmos.line_2d(
+                    top + Vec2::new(7.0, 0.0),
+                    bottom + Vec2::new(3.0, 0.0),
+                    color,
+                );
             }
         }
     }
@@ -331,7 +352,11 @@ pub fn draw_overlays(
     if ps.alive {
         let p = map(ps.pos);
         dash(&mut gizmos, p, 3.0, C_WHITE);
-        gizmos.line_2d(p - Vec2::new(0.0, 2.5), p + Vec2::new(0.0, 2.5), col(C_WHITE));
+        gizmos.line_2d(
+            p - Vec2::new(0.0, 2.5),
+            p + Vec2::new(0.0, 2.5),
+            col(C_WHITE),
+        );
     }
 }
 
@@ -359,9 +384,8 @@ pub fn update_touch_ui(
             TouchUi::Pause => (Some(lay.pause), false),
             TouchUi::StickBase => (ts.stick.map(|(_, o, _)| (o, range)), false),
             TouchUi::StickKnob => (
-                ts.stick.map(|(_, o, p)| {
-                    (o + (p - o).clamp_length_max(range), range * 0.45)
-                }),
+                ts.stick
+                    .map(|(_, o, p)| (o + (p - o).clamp_length_max(range), range * 0.45)),
                 true,
             ),
         };

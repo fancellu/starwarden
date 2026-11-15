@@ -132,10 +132,7 @@ pub fn update_colonists(
                     c.fall_from = pos.0.y;
                     c.vy = 0.0;
                 } else {
-                    pos.0 = Vec2::new(
-                        wrap(ps.pos.x + carried as f32 * 8.0),
-                        ps.pos.y - 19.0,
-                    );
+                    pos.0 = Vec2::new(wrap(ps.pos.x + carried as f32 * 8.0), ps.pos.y - 19.0);
                     carried += 1;
                     if pos.0.y <= ground + 14.0 {
                         pos.0.y = ground;
@@ -227,8 +224,18 @@ mod tests {
     fn short_fall_is_survived_long_fall_is_not() {
         let ground = terrain::height(X) + 9.0;
         let mut w = world(Vec2::new(X + 2000.0, 200.0));
-        let low = colonist(&mut w, CState::Falling, ground - 1.0, ground + SAFE_FALL - 10.0);
-        let high = colonist(&mut w, CState::Falling, ground - 1.0, ground + SAFE_FALL + 60.0);
+        let low = colonist(
+            &mut w,
+            CState::Falling,
+            ground - 1.0,
+            ground + SAFE_FALL - 10.0,
+        );
+        let high = colonist(
+            &mut w,
+            CState::Falling,
+            ground - 1.0,
+            ground + SAFE_FALL + 60.0,
+        );
         step(&mut w);
         assert_eq!(state(&w, low), Some(CState::Walking));
         assert_eq!(state(&w, high), None, "a long fall is fatal");

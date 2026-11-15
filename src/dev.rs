@@ -10,10 +10,10 @@ use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
 use crate::colonists::Colonist;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
-use crate::meshes::Art;
-use crate::world::Rng;
 use crate::input::PlayerInput;
+use crate::meshes::Art;
 use crate::player::PlayerState;
+use crate::world::Rng;
 use crate::world::{delta, Pos};
 
 #[derive(Resource)]
@@ -87,11 +87,17 @@ fn demo(
             ];
             for (i, kind) in kinds.into_iter().enumerate() {
                 for elite in [false, true] {
-                    let off = Vec2::new(
-                        -320.0 + i as f32 * 130.0,
-                        if elite { 150.0 } else { 80.0 },
+                    let off =
+                        Vec2::new(-320.0 + i as f32 * 130.0, if elite { 150.0 } else { 80.0 });
+                    spawn_enemy(
+                        &mut commands,
+                        &art,
+                        &mut rng,
+                        kind,
+                        elite,
+                        ps.pos + off,
+                        false,
                     );
-                    spawn_enemy(&mut commands, &art, &mut rng, kind, elite, ps.pos + off, false);
                 }
             }
         }

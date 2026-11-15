@@ -5,6 +5,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::sprite_render::AlphaMode2d;
 use std::f32::consts::{PI, TAU};
 
 use crate::consts::*;
@@ -93,7 +94,10 @@ impl Shape {
             let a0 = rot + i as f32 / n as f32 * TAU;
             let a1 = rot + (i + 1) as f32 / n as f32 * TAU;
             let p = |a: f32, r: f32| (center.0 + a.cos() * r, center.1 + a.sin() * r);
-            self.quad([p(a0, r0), p(a0, r1), p(a1, r1), p(a1, r0)], [c0, c1, c1, c0]);
+            self.quad(
+                [p(a0, r0), p(a0, r1), p(a1, r1), p(a1, r0)],
+                [c0, c1, c1, c0],
+            );
         }
         self
     }
@@ -109,11 +113,69 @@ impl Shape {
     }
 }
 
+/// Accumulates textured, tinted quads that all share the glow material, so that any number
+/// of stars, particles and shots are drawn with one mesh and one draw call.
+///
+/// Bevy gives every sprite with its own colour or size a separate material, which is far too
+/// slow for hundreds of fading particles; this is the cheap alternative.
+#[derive(Default)]
+pub struct GlowQuads {
+    pos: Vec<[f32; 3]>,
+    uv: Vec<[f32; 2]>,
+    col: Vec<[f32; 4]>,
+    idx: Vec<u32>,
+}
+
+impl GlowQuads {
+    /// Adds a quad. `soft` uses the round glow; otherwise the quad is a solid rectangle.
+    pub fn push(&mut self, center: Vec2, size: Vec2, color: LinearRgba, soft: bool) {
+        let base = self.pos.len() as u32;
+        let h = size * 0.5;
+        for (sx, sy) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+            self.pos
+                .push([center.x + sx * h.x, center.y + sy * h.y, 0.0]);
+            // The centre of the glow texture is fully opaque, so pointing every corner at it
+            // gives a solid colour.
+            self.uv.push(if soft {
+                [0.5 + sx * 0.5, 0.5 - sy * 0.5]
+            } else {
+                [0.5, 0.5]
+            });
+            self.col.push(arr(color));
+        }
+        self.idx
+            .extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.pos.is_empty()
+    }
+
+    /// Moves the quads into `mesh`, replacing what it held.
+    pub fn write_to(&mut self, mesh: &mut Mesh) {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, std::mem::take(&mut self.pos));
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, std::mem::take(&mut self.uv));
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, std::mem::take(&mut self.col));
+        mesh.insert_indices(Indices::U32(std::mem::take(&mut self.idx)));
+    }
+
+    pub fn build(&mut self) -> Mesh {
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        self.write_to(&mut mesh);
+        mesh
+    }
+}
+
 /// Handles to all shared meshes, the single vertex-colour material and the glow texture.
 #[derive(Resource)]
 pub struct Art {
     pub mat: Handle<ColorMaterial>,
     pub glow: Handle<Image>,
+    /// Material for [`GlowQuads`] meshes: the glow texture tinted by vertex colour.
+    pub glow_mat: Handle<ColorMaterial>,
     pub ship: Handle<Mesh>,
     pub flame: Handle<Mesh>,
     pub missile: Handle<Mesh>,
@@ -157,7 +219,10 @@ fn ship() -> Mesh {
         C_CYAN,
     );
     // Canopy.
-    s.poly(&[(12.0, 0.0), (3.0, 3.0), (-3.0, 0.0), (3.0, -3.0)], rgb(0.02, 0.1, 0.3));
+    s.poly(
+        &[(12.0, 0.0), (3.0, 3.0), (-3.0, 0.0), (3.0, -3.0)],
+        rgb(0.02, 0.1, 0.3),
+    );
     s.build()
 }
 
@@ -175,7 +240,16 @@ fn flame() -> Mesh {
 
 fn missile() -> Mesh {
     let mut s = Shape::default();
-    s.poly(&[(9.0, 0.0), (3.0, 2.5), (-7.0, 2.5), (-7.0, -2.5), (3.0, -2.5)], C_WHITE);
+    s.poly(
+        &[
+            (9.0, 0.0),
+            (3.0, 2.5),
+            (-7.0, 2.5),
+            (-7.0, -2.5),
+            (3.0, -2.5),
+        ],
+        C_WHITE,
+    );
     s.poly(&[(-4.0, 2.5), (-9.0, 6.0), (-7.0, 2.5)], C_AMBER);
     s.poly(&[(-4.0, -2.5), (-9.0, -6.0), (-7.0, -2.5)], C_AMBER);
     s.build()
@@ -185,11 +259,23 @@ fn colonist() -> Mesh {
     let mut s = Shape::default();
     // Helmet with visor.
     s.circle((0.0, 7.5), 3.4, 10, C_WHITE, C_PEACH);
-    s.poly(&[(-2.2, 8.2), (2.2, 8.2), (2.2, 6.6), (-2.2, 6.6)], C_CYAN_DIM);
+    s.poly(
+        &[(-2.2, 8.2), (2.2, 8.2), (2.2, 6.6), (-2.2, 6.6)],
+        C_CYAN_DIM,
+    );
     // Suit and legs.
-    s.poly(&[(-3.2, 4.0), (3.2, 4.0), (2.4, -3.0), (-2.4, -3.0)], C_PEACH);
-    s.poly(&[(-2.4, -3.0), (-0.4, -3.0), (-1.0, -8.0), (-3.0, -8.0)], dim(C_PEACH, 0.6));
-    s.poly(&[(0.4, -3.0), (2.4, -3.0), (3.0, -8.0), (1.0, -8.0)], dim(C_PEACH, 0.6));
+    s.poly(
+        &[(-3.2, 4.0), (3.2, 4.0), (2.4, -3.0), (-2.4, -3.0)],
+        C_PEACH,
+    );
+    s.poly(
+        &[(-2.4, -3.0), (-0.4, -3.0), (-1.0, -8.0), (-3.0, -8.0)],
+        dim(C_PEACH, 0.6),
+    );
+    s.poly(
+        &[(0.4, -3.0), (2.4, -3.0), (3.0, -8.0), (1.0, -8.0)],
+        dim(C_PEACH, 0.6),
+    );
     // Backpack beacon.
     s.circle((0.0, 1.2), 1.2, 6, C_WHITE, C_GREEN);
     s.build()
@@ -217,7 +303,10 @@ fn harvester(elite: bool) -> Mesh {
         [a, a, b, b],
     );
     // Claws.
-    s.poly(&[(-11.0, -4.0), (-7.0, -4.0), (-12.0, -13.0), (-15.0, -9.0)], a);
+    s.poly(
+        &[(-11.0, -4.0), (-7.0, -4.0), (-12.0, -13.0), (-15.0, -9.0)],
+        a,
+    );
     s.poly(&[(11.0, -4.0), (7.0, -4.0), (12.0, -13.0), (15.0, -9.0)], a);
     s.poly(&[(-12.0, -13.0), (-15.0, -9.0), (-8.0, -15.0)], C_WHITE);
     s.poly(&[(12.0, -13.0), (15.0, -9.0), (8.0, -15.0)], C_WHITE);
@@ -325,8 +414,11 @@ fn glow_image() -> Image {
     let mut data = Vec::with_capacity((N * N * 4) as usize);
     for y in 0..N {
         for x in 0..N {
-            let d = Vec2::new(x as f32 + 0.5 - N as f32 / 2.0, y as f32 + 0.5 - N as f32 / 2.0)
-                .length()
+            let d = Vec2::new(
+                x as f32 + 0.5 - N as f32 / 2.0,
+                y as f32 + 0.5 - N as f32 / 2.0,
+            )
+            .length()
                 / (N as f32 / 2.0);
             let a = (1.0 - d).clamp(0.0, 1.0);
             let a = a * a * (3.0 - 2.0 * a);
@@ -358,9 +450,15 @@ pub fn setup_art(
     let hive = pair(hive);
     let stinger = pair(stinger);
     let stalker = pair(stalker);
+    let glow = images.add(glow_image());
     commands.insert_resource(Art {
         mat: materials.add(ColorMaterial::default()),
-        glow: images.add(glow_image()),
+        glow_mat: materials.add(ColorMaterial {
+            texture: Some(glow.clone()),
+            alpha_mode: AlphaMode2d::Blend,
+            ..default()
+        }),
+        glow,
         ship: meshes.add(ship()),
         flame: meshes.add(flame()),
         missile: meshes.add(missile()),
