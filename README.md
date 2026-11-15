@@ -135,6 +135,8 @@ tar -c --exclude=./target --exclude=./dist --exclude=./.git . |
 
 ## Project layout
 
+For a guided tour of how the code works, see [docs/TUTORIAL.md](docs/TUTORIAL.md).
+
 | File                | What it does                                                    |
 | ------------------- | --------------------------------------------------------------- |
 | `src/main.rs`       | App setup, camera and bloom, system ordering                    |
