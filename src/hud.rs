@@ -33,6 +33,7 @@ pub enum TouchUi {
     Fire,
     Missile,
     Bomb,
+    Sprint,
     Pause,
 }
 
@@ -148,6 +149,7 @@ pub fn setup_hud(mut commands: Commands) {
     commands.spawn(ring(TouchUi::Fire, "FIRE", rgb(0.4, 1.0, 1.0)));
     commands.spawn(ring(TouchUi::Missile, "MISSILE", rgb(1.0, 0.7, 0.2)));
     commands.spawn(ring(TouchUi::Bomb, "BOMB", rgb(1.0, 0.3, 0.8)));
+    commands.spawn(ring(TouchUi::Sprint, "SPRINT", rgb(0.5, 1.0, 0.5)));
     commands.spawn(ring(TouchUi::Pause, "II", rgb(1.0, 1.0, 1.0)));
 }
 
@@ -243,8 +245,14 @@ pub fn update_hud(
             format!(
                 "WAVE {}\n{}\n{}\n{}",
                 game.wave,
-                row(format!("SHIPS {}", game.lives), format!("SHIELDS {}", game.shields)),
-                row(format!("BOMBS {}", game.bombs), format!("MISSILES {}", game.missiles)),
+                row(
+                    format!("SHIPS {}", game.lives),
+                    format!("SHIELDS {}", game.shields)
+                ),
+                row(
+                    format!("BOMBS {}", game.bombs),
+                    format!("MISSILES {}", game.missiles)
+                ),
                 people
             ),
         );
@@ -315,6 +323,22 @@ pub fn draw_overlays(
                 );
             }
         }
+    }
+
+    // Sprint meter under the ship, only while it is not full; dim while locked.
+    if ps.alive && ps.sprint < 1.0 {
+        let base = screen(ps.pos) + Vec2::new(-18.0, -24.0);
+        let c = if ps.sprint_locked {
+            with_alpha(C_AMBER_DIM, 0.7)
+        } else {
+            with_alpha(C_GREEN, 0.8)
+        };
+        gizmos.line_2d(
+            base,
+            base + Vec2::new(36.0, 0.0),
+            col(with_alpha(C_WHITE, 0.15)),
+        );
+        gizmos.line_2d(base, base + Vec2::new(36.0 * ps.sprint, 0.0), col(c));
     }
 
     // --- Scanner ---
@@ -400,6 +424,7 @@ pub fn update_touch_ui(
             TouchUi::Fire => (Some(lay.fire), ts.fire),
             TouchUi::Missile => (Some(lay.missile), ts.missile),
             TouchUi::Bomb => (Some(lay.bomb), ts.bomb),
+            TouchUi::Sprint => (Some(lay.sprint), ts.sprint),
             TouchUi::Pause => (Some(lay.pause), false),
             TouchUi::StickBase => (ts.stick.map(|(_, o, _)| (o, range)), false),
             TouchUi::StickKnob => (

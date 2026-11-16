@@ -62,8 +62,8 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
                 ..default()
             },),
             line(
-                "KEYS   ARROWS/WASD MOVE - SPACE LASER - SHIFT MISSILE - ENTER BOMB - P PAUSE\n\
-                 PAD    STICK MOVE - A LASER - X MISSILE - B BOMB - START PAUSE\n\
+                "KEYS   ARROWS/WASD MOVE - SPACE LASER - X MISSILE - B BOMB - SHIFT SPRINT - P PAUSE\n\
+                 PAD    STICK MOVE - A LASER - X MISSILE - B BOMB - RB SPRINT - START PAUSE\n\
                  TOUCH  LEFT THUMB STEERS - BUTTONS ON THE RIGHT",
                 14.0,
                 dim,

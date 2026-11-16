@@ -52,6 +52,14 @@ pub const CARRY_MIN_SPEED: f32 = 0.6;
 pub const SET_DOWN_POINTS: u32 = 500;
 /// Highest set-down multiplier.
 pub const CARRY_BONUS_MAX: u32 = 5;
+/// Speed and acceleration multiplier while sprinting.
+pub const SPRINT_BOOST: f32 = 1.6;
+/// Sprint meter used per second of sprinting (a full meter lasts 2 seconds).
+pub const SPRINT_DRAIN: f32 = 0.5;
+/// Sprint meter regained per second when not sprinting (full again in 4 seconds).
+pub const SPRINT_REFILL: f32 = 0.25;
+/// After running dry, sprint is locked until the meter is back to this level.
+pub const SPRINT_RESUME: f32 = 0.3;
 /// Most shields the ship can hold.
 pub const SHIELD_MAX: u32 = 9;
 /// Chance that a destroyed enemy drops a shield (Hives use the higher value; elites double it).

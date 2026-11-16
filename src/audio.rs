@@ -198,6 +198,18 @@ fn synth(sfx: Sfx) -> Vec<f32> {
                 a.sine(lerp(900.0, 1300.0, u)) * 0.5 * (1.0 - u)
             })
         }
+        Sfx::Sprint => {
+            // A whoosh: noise that opens up and brightens, over a low engine roar.
+            let mut n = Noise::new(23);
+            let (mut roar, mut grit) = (Osc::default(), Osc::default());
+            render(0.6, |_, u| {
+                let env = (u * 8.0).min(1.0) * (1.0 - u).powf(1.6);
+                let air = n.low(lerp(0.08, 0.45, (u * 2.5).min(1.0))) * 1.8;
+                let low =
+                    roar.saw(lerp(70.0, 110.0, u)) * 0.35 + grit.square(lerp(55.0, 85.0, u)) * 0.12;
+                ((air + low) * env).clamp(-1.0, 1.0) * 0.8
+            })
+        }
         Sfx::ShieldUp => arpeggio(&[587.0, 880.0, 1175.0, 1760.0], 0.05, 0.35),
         Sfx::ShieldHit => {
             let (mut a, mut b) = (Osc::default(), Osc::default());
@@ -272,7 +284,7 @@ pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
 
 // --- Playback ----------------------------------------------------------------------------------
 
-const ALL: [Sfx; 20] = [
+const ALL: [Sfx; 21] = [
     Sfx::Laser,
     Sfx::Missile,
     Sfx::Hit,
@@ -293,6 +305,7 @@ const ALL: [Sfx; 20] = [
     Sfx::PlanetLost,
     Sfx::ShieldUp,
     Sfx::ShieldHit,
+    Sfx::Sprint,
 ];
 
 fn volume(sfx: Sfx) -> f32 {

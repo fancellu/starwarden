@@ -49,13 +49,18 @@ kills ends it.
 | Action     | Keyboard                | Gamepad                | Touch                   |
 | ---------- | ----------------------- | ---------------------- | ----------------------- |
 | Move       | Arrow keys or WASD      | Left stick or D-pad    | Drag on the left half   |
-| Laser      | Space (also J, Z)       | A / right trigger      | FIRE button (hold)      |
-| Missile    | Shift (also X, K)       | X / left trigger / RB  | MISSILE button          |
-| Smart bomb | Enter (also B, L)       | B / Y / LB             | BOMB button             |
-| Pause      | P or Escape             | Start                  | Pause button, top right |
+| Laser      | Space                   | A                      | FIRE button (hold)      |
+| Missile    | X                       | X                      | MISSILE button          |
+| Smart bomb | B                       | B                      | BOMB button             |
+| Sprint     | Shift (hold)            | RB (hold)              | SPRINT button (hold)    |
+| Pause      | P                       | Start                  | Pause button, top right |
 | Start      | Space or Enter          | A or Start             | Tap anywhere            |
 
 The touch controls appear after the first touch.
+
+Sprint makes the ship 60% faster but runs on a meter: two seconds from full, refilling in
+four. If it runs dry it cannot be used again until it is back to 30%. A small bar under the
+ship shows the meter whenever it is not full.
 
 ## Run on the desktop
 

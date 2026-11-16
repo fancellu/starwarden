@@ -197,6 +197,7 @@ pub enum Sfx {
     PlanetLost,
     ShieldUp,
     ShieldHit,
+    Sprint,
 }
 
 #[derive(Clone, Copy)]

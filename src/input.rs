@@ -10,6 +10,8 @@ pub struct PlayerInput {
     pub mv: Vec2,
     /// Held.
     pub fire: bool,
+    /// Held.
+    pub sprint: bool,
     /// Pressed this frame.
     pub missile: bool,
     pub bomb: bool,
@@ -24,6 +26,7 @@ pub struct TouchLayout {
     pub fire: (Vec2, f32),
     pub missile: (Vec2, f32),
     pub bomb: (Vec2, f32),
+    pub sprint: (Vec2, f32),
     pub pause: (Vec2, f32),
 }
 
@@ -63,6 +66,7 @@ pub fn touch_layout(w: f32, h: f32, zoom: f32) -> TouchLayout {
         fire: at(w - 84.0 * s, h - 84.0 * s, 58.0 * s),
         missile: at(w - 204.0 * s, h - 64.0 * s, 42.0 * s),
         bomb: at(w - 72.0 * s, h - 204.0 * s, 42.0 * s),
+        sprint: at(w - 204.0 * s, h - 184.0 * s, 36.0 * s),
         pause: at(w - 36.0, 112.0, 24.0),
     }
 }
@@ -76,6 +80,7 @@ pub struct TouchState {
     pub fire: bool,
     pub missile: bool,
     pub bomb: bool,
+    pub sprint: bool,
 }
 
 fn inside(p: Vec2, c: (Vec2, f32)) -> bool {
@@ -108,15 +113,12 @@ pub fn gather_input(
     if key(&[KeyCode::ArrowDown, KeyCode::KeyS]) {
         i.mv.y -= 1.0;
     }
-    i.fire |= key(&[KeyCode::Space, KeyCode::KeyJ, KeyCode::KeyZ]);
-    i.missile |= key_down(&[
-        KeyCode::ShiftLeft,
-        KeyCode::ShiftRight,
-        KeyCode::KeyX,
-        KeyCode::KeyK,
-    ]);
-    i.bomb |= key_down(&[KeyCode::KeyB, KeyCode::Enter, KeyCode::KeyL]);
-    i.pause |= key_down(&[KeyCode::KeyP, KeyCode::Escape]);
+    // One key per action (both Shift keys count as one).
+    i.fire |= key(&[KeyCode::Space]);
+    i.missile |= key_down(&[KeyCode::KeyX]);
+    i.bomb |= key_down(&[KeyCode::KeyB]);
+    i.sprint |= key(&[KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    i.pause |= key_down(&[KeyCode::KeyP]);
     i.start |= key_down(&[KeyCode::Space, KeyCode::Enter]);
 
     // --- Gamepads (any connected pad) ---
@@ -143,13 +145,11 @@ pub fn gather_input(
         if pad.pressed(GamepadButton::DPadDown) {
             i.mv.y -= 1.0;
         }
-        i.fire |= pad.pressed(GamepadButton::South) || pad.pressed(GamepadButton::RightTrigger2);
-        i.missile |= pad.just_pressed(GamepadButton::West)
-            || pad.just_pressed(GamepadButton::LeftTrigger2)
-            || pad.just_pressed(GamepadButton::RightTrigger);
-        i.bomb |= pad.just_pressed(GamepadButton::East)
-            || pad.just_pressed(GamepadButton::North)
-            || pad.just_pressed(GamepadButton::LeftTrigger);
+        // One button per action; Y, LB and both triggers are left free.
+        i.fire |= pad.pressed(GamepadButton::South);
+        i.missile |= pad.just_pressed(GamepadButton::West);
+        i.bomb |= pad.just_pressed(GamepadButton::East);
+        i.sprint |= pad.pressed(GamepadButton::RightTrigger);
         i.pause |= pad.just_pressed(GamepadButton::Start);
         i.start |= pad.just_pressed(GamepadButton::South) || pad.just_pressed(GamepadButton::Start);
     }
@@ -163,6 +163,7 @@ pub fn gather_input(
         ts.fire = false;
         ts.missile = false;
         ts.bomb = false;
+        ts.sprint = false;
 
         if touches.any_just_pressed() {
             ts.used = true;
@@ -177,6 +178,8 @@ pub fn gather_input(
             } else if inside(p, lay.bomb) {
                 i.bomb = true;
                 ts.bomb = true;
+            } else if inside(p, lay.sprint) {
+                // Held; handled with FIRE below.
             } else {
                 i.start = true;
                 // A new touch on the left side of the screen grabs the stick.
@@ -212,6 +215,10 @@ pub fn gather_input(
                 i.fire = true;
                 ts.fire = true;
             }
+            if inside(t.position(), lay.sprint) {
+                i.sprint = true;
+                ts.sprint = true;
+            }
         }
     }
 
@@ -232,14 +239,20 @@ mod tests {
             (2560.0, 1440.0),
         ] {
             let l = touch_layout(w, h, 1.0);
-            for (c, r) in [l.fire, l.missile, l.bomb, l.pause] {
+            for (c, r) in [l.fire, l.missile, l.bomb, l.sprint, l.pause] {
                 assert!(c.x - r >= 0.0 && c.x + r <= w, "{w}x{h}: {c} r{r}");
                 assert!(c.y - r >= 0.0 && c.y + r <= h, "{w}x{h}: {c} r{r}");
             }
-            // Fire, missile and bomb must not overlap each other.
-            assert!(l.fire.0.distance(l.missile.0) > l.fire.1 + l.missile.1);
-            assert!(l.fire.0.distance(l.bomb.0) > l.fire.1 + l.bomb.1);
-            assert!(l.missile.0.distance(l.bomb.0) > l.missile.1 + l.bomb.1);
+            // The action buttons must not overlap each other, even with the generous hit area.
+            let buttons = [l.fire, l.missile, l.bomb, l.sprint];
+            for (i, a) in buttons.iter().enumerate() {
+                for b in &buttons[i + 1..] {
+                    assert!(
+                        a.0.distance(b.0) > (a.1 + b.1) * 1.15,
+                        "{w}x{h}: {a:?} {b:?}"
+                    );
+                }
+            }
             // Rendering at half resolution leaves the buttons in the same place on screen.
             let half = touch_layout(w / 2.0, h / 2.0, 2.0);
             assert!((half.bomb.0 * 2.0).distance(l.bomb.0) < 0.01);

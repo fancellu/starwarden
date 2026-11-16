@@ -32,6 +32,25 @@ pub struct PlayerState {
     pub respawn: f32,
     /// Colonists hanging under the ship, counted by `update_colonists`.
     pub carried: u32,
+    /// Sprint meter, 0 to 1.
+    pub sprint: f32,
+    /// Set when the meter runs dry; cleared once it refills to `SPRINT_RESUME`.
+    pub sprint_locked: bool,
+    /// Sprinting this frame.
+    pub sprinting: bool,
+}
+
+/// Advances the sprint meter by `dt`. Returns the new meter, whether it is locked, and whether
+/// the ship is sprinting this frame.
+pub fn sprint_step(meter: f32, locked: bool, wanted: bool, dt: f32) -> (f32, bool, bool) {
+    let active = wanted && !locked && meter > 0.0;
+    if active {
+        let meter = (meter - SPRINT_DRAIN * dt).max(0.0);
+        (meter, meter <= 0.0, true)
+    } else {
+        let meter = (meter + SPRINT_REFILL * dt).min(1.0);
+        (meter, locked && meter < SPRINT_RESUME, false)
+    }
 }
 
 /// Fraction of normal speed left when carrying `n` colonists.
@@ -48,6 +67,9 @@ impl Default for PlayerState {
             alive: false,
             respawn: 0.0,
             carried: 0,
+            sprint: 1.0,
+            sprint_locked: false,
+            sprinting: false,
         }
     }
 }
@@ -96,6 +118,7 @@ pub fn player_control(
     )>,
     mut flame: Query<&mut Transform, (With<Flame>, Without<Player>)>,
     mut fx: MessageWriter<Fx>,
+    mut sfx: MessageWriter<Sfx>,
 ) {
     let dt = time.delta_secs();
     let Ok((mut p, mut pos, mut vel, mut tf, mut vis, mut halo)) = q.single_mut() else {
@@ -114,8 +137,16 @@ pub fn player_control(
     if input.mv.x.abs() > 0.15 {
         p.facing = input.mv.x.signum();
     }
-    // Each colonist carried makes the ship a little slower.
-    let load = carry_speed(ps.carried);
+    let (meter, locked, sprinting) = sprint_step(ps.sprint, ps.sprint_locked, input.sprint, dt);
+    if sprinting && !ps.sprinting {
+        sfx.write(Sfx::Sprint);
+    }
+    ps.sprint = meter;
+    ps.sprint_locked = locked;
+    ps.sprinting = sprinting;
+
+    // Each colonist carried makes the ship a little slower; sprinting makes it faster.
+    let load = carry_speed(ps.carried) * if sprinting { SPRINT_BOOST } else { 1.0 };
     vel.0.x += input.mv.x * PLAYER_ACCEL * load * dt;
     vel.0.x *= (-PLAYER_DRAG * dt).exp();
     vel.0.x = vel.0.x.clamp(-PLAYER_MAX_VX * load, PLAYER_MAX_VX * load);
@@ -153,9 +184,11 @@ pub fn player_control(
 
     let thrust = input.mv.x.abs();
     let flicker = 0.8 + 0.4 * (time.elapsed_secs() * 60.0).sin();
+    // The flame stretches while sprinting.
+    let boost = if sprinting { 1.7 } else { 1.0 };
     for mut f in &mut flame {
-        f.scale.x = (0.25 + thrust * 1.1) * flicker;
-        f.scale.y = 0.7 + thrust * 0.5;
+        f.scale.x = (0.25 + thrust * 1.1) * flicker * boost;
+        f.scale.y = (0.7 + thrust * 0.5) * boost.sqrt();
     }
     if thrust > 0.3 {
         fx.write(Fx::new(
@@ -236,6 +269,8 @@ pub fn player_respawn(
     let pos = Vec2::new(ps.pos.x, 40.0);
     ps.pos = pos;
     ps.alive = true;
+    ps.sprint = 1.0;
+    ps.sprint_locked = false;
     spawn_player(&mut commands, &art, pos, ps.facing, 2.5);
 }
 
@@ -291,5 +326,33 @@ mod tests {
         assert!(w.get_entity(ship).is_err());
         assert_eq!(w.resource::<Game>().lives, START_LIVES - 1);
         assert!(!w.resource::<PlayerState>().alive);
+    }
+}
+
+#[cfg(test)]
+mod sprint_tests {
+    use super::*;
+
+    #[test]
+    fn sprint_drains_while_held_and_refills_when_released() {
+        let (m, locked, active) = sprint_step(1.0, false, true, 1.0);
+        assert!(active && !locked);
+        assert!((m - (1.0 - SPRINT_DRAIN)).abs() < 1e-6);
+        let (m2, _, active) = sprint_step(m, false, false, 1.0);
+        assert!(!active);
+        assert!((m2 - (m + SPRINT_REFILL)).abs() < 1e-6);
+        assert_eq!(sprint_step(1.0, false, false, 10.0).0, 1.0);
+    }
+
+    #[test]
+    fn empty_meter_locks_until_partly_refilled() {
+        let (m, locked, _) = sprint_step(0.1, false, true, 1.0);
+        assert_eq!(m, 0.0);
+        assert!(locked);
+        // Still locked while held and below the resume level.
+        let (m, locked, active) = sprint_step(m, locked, true, 0.5);
+        assert!(!active && locked);
+        let (_, locked, _) = sprint_step(m, locked, true, SPRINT_RESUME / SPRINT_REFILL);
+        assert!(!locked);
     }
 }

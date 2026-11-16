@@ -146,8 +146,13 @@ fn demo(
                     d.x.signum() * 0.2
                 };
                 input.mv.y = (d.y / 30.0).clamp(-1.0, 1.0);
+                // Sprint to close a long gap.
+                input.sprint = d.x.abs() > 700.0;
             }
-            (None, None) => input.mv.x = 1.0,
+            (None, None) => {
+                input.mv.x = 1.0;
+                input.sprint = true;
+            }
         }
         input.fire = true;
         input.missile = (t * 1.2).fract() < 0.05;
