@@ -2,7 +2,7 @@
 
 - [x] 1 Shields (drop from some defeated enemies, need to be picked up before they fall, can carry up to 9)
 - [x] 2 Sprint (right shoulder button, shift key)
-- 3 Powerups (Speed, invincibility, fatter beam, super sprint, time warp)
+- [x] 3 Powerups (Speed, invincibility, fatter beam, super sprint, time warp)
 
 ## Player and weapons
 

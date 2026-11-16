@@ -61,6 +61,57 @@ pub struct Game {
     pub combo_timer: f32,
     /// Hits the ship can take without being destroyed.
     pub shields: u32,
+    /// Seconds left on each powerup, indexed by `Power as usize`.
+    pub powers: [f32; Power::COUNT],
+}
+
+/// Timed powerups dropped by destroyed enemies. Several can run at once.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Power {
+    Speed,
+    Invincible,
+    WideBeam,
+    SuperSprint,
+    TimeWarp,
+}
+
+impl Power {
+    pub const COUNT: usize = 5;
+    pub const ALL: [Power; Power::COUNT] = [
+        Power::Speed,
+        Power::Invincible,
+        Power::WideBeam,
+        Power::SuperSprint,
+        Power::TimeWarp,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Power::Speed => "SPEED",
+            Power::Invincible => "INVINCIBLE",
+            Power::WideBeam => "WIDE BEAM",
+            Power::SuperSprint => "SUPER SPRINT",
+            Power::TimeWarp => "TIME WARP",
+        }
+    }
+
+    pub fn color(self) -> LinearRgba {
+        match self {
+            Power::Speed => C_GREEN,
+            Power::Invincible => C_AMBER,
+            Power::WideBeam => C_MAGENTA,
+            Power::SuperSprint => C_BLUE,
+            Power::TimeWarp => C_VIOLET,
+        }
+    }
+
+    pub fn duration(self) -> f32 {
+        if self == Power::Invincible {
+            POWER_INVINCIBLE_TIME
+        } else {
+            POWER_TIME
+        }
+    }
 }
 
 impl Default for Game {
@@ -82,6 +133,7 @@ impl Default for Game {
             combo: 0,
             combo_timer: 0.0,
             shields: 0,
+            powers: [0.0; Power::COUNT],
         }
     }
 }
@@ -148,6 +200,43 @@ impl Game {
         self.shields += 1;
         true
     }
+
+    pub fn power_on(&self, p: Power) -> bool {
+        self.powers[p as usize] > 0.0
+    }
+
+    /// Starts a powerup, or refills its timer if it is already running.
+    pub fn grant_power(&mut self, p: Power) {
+        self.powers[p as usize] = p.duration();
+    }
+
+    /// Runs the powerup timers down; returns true when one ran out this step.
+    pub fn tick_powers(&mut self, dt: f32) -> bool {
+        let mut expired = false;
+        for t in &mut self.powers {
+            if *t > 0.0 {
+                *t -= dt;
+                if *t <= 0.0 {
+                    *t = 0.0;
+                    expired = true;
+                }
+            }
+        }
+        expired
+    }
+
+    pub fn clear_powers(&mut self) {
+        self.powers = [0.0; Power::COUNT];
+    }
+
+    /// Speed that enemies and their shots run at (slower during a time warp).
+    pub fn enemy_time_scale(&self) -> f32 {
+        if self.power_on(Power::TimeWarp) {
+            TIME_WARP
+        } else {
+            1.0
+        }
+    }
 }
 
 /// Large centre-screen announcement that fades out.
@@ -198,6 +287,8 @@ pub enum Sfx {
     ShieldUp,
     ShieldHit,
     Sprint,
+    PowerUp,
+    PowerDown,
 }
 
 #[derive(Clone, Copy)]
@@ -220,6 +311,8 @@ pub enum FxKind {
     PlanetChunk,
     /// Floating score text.
     Score(u32),
+    /// Floating word, such as the name of a powerup just caught.
+    Label(&'static str),
 }
 
 #[derive(Message, Clone, Copy)]
@@ -323,5 +416,25 @@ mod tests {
         assert_eq!(g.shields, SHIELD_MAX);
         g.reset();
         assert_eq!(g.shields, 0);
+    }
+
+    #[test]
+    fn powers_run_out_refill_and_stack() {
+        let mut g = Game::default();
+        assert_eq!(g.enemy_time_scale(), 1.0);
+        g.grant_power(Power::TimeWarp);
+        g.grant_power(Power::Speed);
+        assert!(g.power_on(Power::TimeWarp) && g.power_on(Power::Speed));
+        assert_eq!(g.enemy_time_scale(), TIME_WARP);
+        assert!(!g.tick_powers(POWER_TIME - 1.0));
+        g.grant_power(Power::Speed);
+        assert!(g.tick_powers(2.0), "time warp ran out");
+        assert!(!g.power_on(Power::TimeWarp));
+        assert!(g.power_on(Power::Speed), "refilled, so still running");
+        g.clear_powers();
+        assert!(!g.power_on(Power::Speed));
+        g.grant_power(Power::Invincible);
+        g.reset();
+        assert!(!g.power_on(Power::Invincible));
     }
 }

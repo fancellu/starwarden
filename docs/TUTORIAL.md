@@ -135,9 +135,16 @@ and `apply_damage` in `enemies.rs` is where enemies are destroyed. Scoring, expl
 the Hive bursting into Stingers therefore happen in one place, whatever did the damage:
 laser, missile, smart bomb or ramming the ship. That is also where each kill feeds the combo
 multiplier kept on `Game` (`register_kill`, `multiplier`); `run_waves` runs its timer down and
-`player_death` ends it. It also rolls for a shield drop: [`src/pickups.rs`](../src/pickups.rs)
-spawns a falling `ShieldPickup` that the ship can catch. When the ship is hit, `player_death`
-spends a shield (and grants a moment of invulnerability) before it considers losing a ship.
+`player_death` ends it. It also rolls for a shield or powerup drop:
+[`src/pickups.rs`](../src/pickups.rs) spawns a falling `Pickup` whose `kind` is either a shield
+or a `Power`. When the ship is hit, `player_death` spends a shield (and grants a moment of
+invulnerability) before it considers losing a ship.
+
+Powerups are just timers in `Game::powers`, one per `Power`, so several can run at once.
+`player_control` ticks them down, and each system that cares asks `game.power_on(...)`: the
+flight model for speed and super sprint, `fire_weapons` for the wide beam, `player_collisions`
+for invincibility. Time warp is a single number, `game.enemy_time_scale()`, which `enemy_ai`,
+`update_shots` and `integrate` multiply into their time step for enemies and enemy shots only.
 
 ## Enemies
 

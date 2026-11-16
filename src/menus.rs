@@ -52,6 +52,7 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
                     "{NAME_HARVESTER}S ABDUCT COLONISTS - SHOOT THEM AND CATCH WHO FALLS\n\
                      AN ESCAPED {NAME_HARVESTER} BECOMES A {NAME_WRAITH}\n\
                      {NAME_HIVE}S BURST INTO {NAME_STINGER}S - {NAME_STALKER}S HUNT THE SLOW\n\
+                     CATCH FALLING SHIELDS AND POWERUPS\n\
                      LOSE EVERY COLONIST AND THE PLANET IS GONE"
                 ),
                 15.0,

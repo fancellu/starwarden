@@ -5,6 +5,9 @@
 //! `STARWARDEN_DEMO_GALLERY=1` instead lines up every enemy type next to an idle ship.
 //! `STARWARDEN_DEMO_CARRY=1` instead clears the enemies, knocks three colonists loose high up,
 //! catches them, carries them for a while and sets them down together (use about 22 seconds).
+//! `STARWARDEN_DEMO_POWER=1` drops each powerup in turn near the ship, one every 6 seconds from
+//! 3 s, for the pilot to catch (use about 36 seconds). With `STARWARDEN_DEMO_GALLERY=1` as well,
+//! it instead lines up a shield and every powerup, each named, above an idle ship.
 //! It does nothing unless the variable is set.
 
 use bevy::prelude::*;
@@ -15,8 +18,9 @@ use crate::consts::TOP_Y;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
 use crate::input::PlayerInput;
 use crate::meshes::Art;
-use crate::pickups::ShieldPickup;
+use crate::pickups::{spawn_power_of, spawn_shield, Pickup, PickupKind};
 use crate::player::PlayerState;
+use crate::state::{Fx, FxKind, Power};
 use crate::world::Rng;
 use crate::world::{delta, Pos};
 
@@ -26,6 +30,7 @@ pub struct Demo {
     void: bool,
     gallery: bool,
     carry: bool,
+    power: bool,
     next_shot: usize,
     wiped: bool,
     /// Run length in seconds (`STARWARDEN_DEMO_SECS`, default 20).
@@ -44,6 +49,7 @@ pub fn plugin(app: &mut App) {
         void: std::env::var("STARWARDEN_DEMO_VOID").is_ok(),
         gallery: std::env::var("STARWARDEN_DEMO_GALLERY").is_ok(),
         carry: std::env::var("STARWARDEN_DEMO_CARRY").is_ok(),
+        power: std::env::var("STARWARDEN_DEMO_POWER").is_ok(),
         next_shot: 0,
         wiped: false,
         secs: std::env::var("STARWARDEN_DEMO_SECS")
@@ -71,10 +77,11 @@ fn demo(
     mut last: Local<f32>,
     mut colonists: Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
     enemies: Query<(Entity, &Pos), With<Enemy>>,
-    shields: Query<&Pos, (With<ShieldPickup>, Without<Colonist>)>,
+    pickups: Query<&Pos, (With<Pickup>, Without<Colonist>)>,
     ps: Res<PlayerState>,
     art: Res<Art>,
     mut rng: ResMut<Rng>,
+    mut fx: MessageWriter<Fx>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let t = time.elapsed_secs();
@@ -84,7 +91,32 @@ fn demo(
     if crossed(1.2) {
         input.start = true;
     }
-    if demo.gallery {
+    if demo.gallery && demo.power {
+        // A row of every pickup, each named, above an idle ship.
+        // After the wave banner has faded.
+        if crossed(7.0) {
+            let kinds = std::iter::once(PickupKind::Shield)
+                .chain(Power::ALL.into_iter().map(PickupKind::Power));
+            for (i, kind) in kinds.enumerate() {
+                let at = ps.pos + Vec2::new(ps.facing * 200.0 + (i as f32 - 2.5) * 175.0, 110.0);
+                let name = match kind {
+                    PickupKind::Shield => {
+                        spawn_shield(&mut commands, &art, &mut rng, at);
+                        "SHIELD"
+                    }
+                    PickupKind::Power(p) => {
+                        spawn_power_of(&mut commands, &art, &mut rng, at, p);
+                        p.name()
+                    }
+                };
+                fx.write(Fx::new(
+                    at - Vec2::new(0.0, 75.0),
+                    kind.color(),
+                    FxKind::Label(name),
+                ));
+            }
+        }
+    } else if demo.gallery {
         if crossed(3.1) {
             let kinds = [
                 Kind::Harvester,
@@ -122,9 +154,17 @@ fn demo(
             );
         }
     } else if t > 1.5 {
-        // Go for a nearby falling shield; otherwise fly at the nearest enemy, then hold
+        if demo.power && ps.alive {
+            for (i, &p) in Power::ALL.iter().enumerate() {
+                if crossed(3.0 + 6.0 * i as f32) {
+                    let at = ps.pos + Vec2::new(0.0, 70.0);
+                    spawn_power_of(&mut commands, &art, &mut rng, at, p);
+                }
+            }
+        }
+        // Go for a nearby falling pickup; otherwise fly at the nearest enemy, then hold
         // station a little way off and shoot.
-        let shield = shields
+        let shield = pickups
             .iter()
             .map(|p| delta(ps.pos, p.0))
             .filter(|d| d.length() < 300.0)

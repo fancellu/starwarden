@@ -7,7 +7,7 @@ use crate::colonists::{CState, Colonist};
 use crate::consts::*;
 use crate::enemies::{Enemy, Kind};
 use crate::input::{page_zoom, stick_range, touch_layout, TouchState};
-use crate::pickups::ShieldPickup;
+use crate::pickups::Pickup;
 use crate::player::PlayerState;
 use crate::state::*;
 use crate::terrain;
@@ -223,9 +223,28 @@ pub fn update_hud(
             1 => String::new(),
             m => format!("\nCOMBO x{m}"),
         };
+        // Active powerups with whole seconds left; each blinks as it is about to run out.
+        let blink_off = ((time.elapsed_secs() * 6.0) as u32).is_multiple_of(2);
+        let powers: String = Power::ALL
+            .iter()
+            .filter_map(|&p| {
+                let left = game.powers[p as usize];
+                if left <= 0.0 {
+                    None
+                } else if left < POWER_WARN && blink_off {
+                    // Keep the line in place while the entry blinks out.
+                    Some("\n".to_string())
+                } else {
+                    Some(format!("\n{:<12} {:>2}", p.name(), left.ceil() as u32))
+                }
+            })
+            .collect();
         set_text(
             &mut t,
-            format!("SCORE {:07}\nBEST  {:07}{combo}", game.score, game.high),
+            format!(
+                "SCORE {:07}\nBEST  {:07}{combo}{powers}",
+                game.score, game.high
+            ),
         );
     }
     if let Ok(mut t) = status.single_mut() {
@@ -295,7 +314,7 @@ pub fn draw_overlays(
     ps: Res<PlayerState>,
     enemies: Query<(&Pos, &Enemy)>,
     colonists: Query<(&Pos, &Colonist)>,
-    shields: Query<&Pos, With<ShieldPickup>>,
+    pickups: Query<(&Pos, &Pickup)>,
 ) {
     if *state.get() == GameState::Title {
         return;
@@ -389,8 +408,8 @@ pub fn draw_overlays(
         let half = if en.kind == Kind::Stinger { 1.0 } else { 2.0 };
         dash(&mut gizmos, map(pos.0), half, c);
     }
-    for pos in &shields {
-        dash(&mut gizmos, map(pos.0), 1.5, C_CYAN);
+    for (pos, p) in &pickups {
+        dash(&mut gizmos, map(pos.0), 1.5, p.kind.color());
     }
     if ps.alive {
         let p = map(ps.pos);

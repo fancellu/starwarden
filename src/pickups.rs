@@ -1,5 +1,6 @@
-//! Shields dropped by destroyed enemies: they drift down and must be caught before they reach
-//! the ground. Each one held absorbs a hit that would otherwise destroy the ship.
+//! Pickups dropped by destroyed enemies: they drift down and must be caught before they reach
+//! the ground. A shield absorbs a hit that would otherwise destroy the ship; a powerup gives the
+//! ship a timed boost.
 
 use bevy::prelude::*;
 
@@ -12,31 +13,60 @@ use crate::state::*;
 use crate::terrain;
 use crate::world::*;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PickupKind {
+    Shield,
+    Power(Power),
+}
+
+impl PickupKind {
+    pub fn color(self) -> LinearRgba {
+        match self {
+            PickupKind::Shield => C_CYAN,
+            PickupKind::Power(p) => p.color(),
+        }
+    }
+}
+
 #[derive(Component)]
-pub struct ShieldPickup {
+pub struct Pickup {
+    pub kind: PickupKind,
     /// Seconds since it was dropped.
     pub t: f32,
     /// Phase of its sideways sway, so neighbours do not move in step.
     pub sway: f32,
 }
 
-/// Chance that a destroyed enemy of this kind drops a shield.
-pub fn drop_chance(kind: Kind, elite: bool) -> f32 {
-    let base = if kind == Kind::Hive {
-        SHIELD_DROP_HIVE
-    } else {
-        SHIELD_DROP
-    };
+fn chance(kind: Kind, elite: bool, base: f32, hive: f32) -> f32 {
+    let c = if kind == Kind::Hive { hive } else { base };
     if elite {
-        base * 2.0
+        c * 2.0
     } else {
-        base
+        c
     }
 }
 
-pub fn spawn_shield(commands: &mut Commands, art: &Art, rng: &mut Rng, pos: Vec2) {
+/// Chance that a destroyed enemy of this kind drops a shield.
+pub fn drop_chance(kind: Kind, elite: bool) -> f32 {
+    chance(kind, elite, SHIELD_DROP, SHIELD_DROP_HIVE)
+}
+
+/// Chance that a destroyed enemy of this kind drops a powerup.
+pub fn power_drop_chance(kind: Kind, elite: bool) -> f32 {
+    chance(kind, elite, POWER_DROP, POWER_DROP_HIVE)
+}
+
+fn spawn_pickup(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
+    art: &Art,
+    rng: &mut Rng,
+    pos: Vec2,
+    kind: PickupKind,
+) {
     commands.spawn((
-        ShieldPickup {
+        Pickup {
+            kind,
             t: 0.0,
             sway: rng.range(0.0, 6.0),
         },
@@ -44,24 +74,46 @@ pub fn spawn_shield(commands: &mut Commands, art: &Art, rng: &mut Rng, pos: Vec2
         Pos(pos),
         Vel(Vec2::new(0.0, -SHIELD_FALL)),
         Glow {
-            color: with_alpha(C_CYAN, 0.35),
+            color: with_alpha(kind.color(), 0.35),
             size: Vec2::splat(46.0),
             soft: true,
         },
-        Mesh2d(art.shield.clone()),
+        Mesh2d(mesh),
         MeshMaterial2d(art.mat.clone()),
         Transform::from_xyz(0.0, pos.y, Z_SHOT),
     ));
 }
 
-/// Moves falling shields, lets the ship catch them and removes those that reach the ground.
+pub fn spawn_shield(commands: &mut Commands, art: &Art, rng: &mut Rng, pos: Vec2) {
+    spawn_pickup(
+        commands,
+        art.shield.clone(),
+        art,
+        rng,
+        pos,
+        PickupKind::Shield,
+    );
+}
+
+/// Drops a powerup of a random kind.
+pub fn spawn_power(commands: &mut Commands, art: &Art, rng: &mut Rng, pos: Vec2) {
+    let p = Power::ALL[rng.index(Power::COUNT)];
+    spawn_power_of(commands, art, rng, pos, p);
+}
+
+pub fn spawn_power_of(commands: &mut Commands, art: &Art, rng: &mut Rng, pos: Vec2, p: Power) {
+    let mesh = art.power[p as usize].clone();
+    spawn_pickup(commands, mesh, art, rng, pos, PickupKind::Power(p));
+}
+
+/// Moves falling pickups, lets the ship catch them and removes those that reach the ground.
 pub fn update_pickups(
     time: Res<Time>,
     state: Res<State<GameState>>,
     mut commands: Commands,
     ps: Res<PlayerState>,
     mut game: ResMut<Game>,
-    mut q: Query<(Entity, &mut ShieldPickup, &Pos, &mut Vel, &mut Transform)>,
+    mut q: Query<(Entity, &mut Pickup, &Pos, &mut Vel, &mut Transform)>,
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
@@ -70,19 +122,34 @@ pub fn update_pickups(
     for (e, mut s, pos, mut vel, mut tf) in &mut q {
         s.t += dt;
         vel.0.x = (s.t * 1.7 + s.sway).sin() * 22.0;
-        tf.rotation = Quat::from_rotation_z(s.t * 1.3);
+        // Shields spin; powerups only rock, so their symbols stay readable.
+        let angle = match s.kind {
+            PickupKind::Shield => s.t * 1.3,
+            PickupKind::Power(_) => (s.t * 2.2 + s.sway).sin() * 0.3,
+        };
+        tf.rotation = Quat::from_rotation_z(angle);
+        let color = s.kind.color();
 
         if playing && ps.alive && delta(ps.pos, pos.0).length() < SHIELD_REACH {
             commands.entity(e).try_despawn();
-            fx.write(Fx::new(pos.0, C_CYAN, FxKind::Rescue));
-            if game.add_shield() {
-                sfx.write(Sfx::ShieldUp);
-            } else {
-                if game.add_score(SHIELD_FULL_POINTS) {
-                    sfx.write(Sfx::ExtraLife);
+            fx.write(Fx::new(pos.0, color, FxKind::Rescue));
+            match s.kind {
+                PickupKind::Shield => {
+                    if game.add_shield() {
+                        sfx.write(Sfx::ShieldUp);
+                    } else {
+                        if game.add_score(SHIELD_FULL_POINTS) {
+                            sfx.write(Sfx::ExtraLife);
+                        }
+                        fx.write(Fx::new(pos.0, color, FxKind::Score(SHIELD_FULL_POINTS)));
+                        sfx.write(Sfx::Blip);
+                    }
                 }
-                fx.write(Fx::new(pos.0, C_CYAN, FxKind::Score(SHIELD_FULL_POINTS)));
-                sfx.write(Sfx::Blip);
+                PickupKind::Power(p) => {
+                    game.grant_power(p);
+                    fx.write(Fx::new(pos.0, color, FxKind::Label(p.name())));
+                    sfx.write(Sfx::PowerUp);
+                }
             }
             continue;
         }
@@ -94,7 +161,7 @@ pub fn update_pickups(
         };
         if grounded {
             commands.entity(e).try_despawn();
-            fx.write(Fx::new(pos.0, C_CYAN_DIM, FxKind::Spark));
+            fx.write(Fx::new(pos.0, with_alpha(color * 0.4, 1.0), FxKind::Spark));
         }
     }
 }
@@ -121,14 +188,22 @@ mod tests {
         w
     }
 
-    fn shield(w: &mut World, pos: Vec2) -> Entity {
+    fn pickup(w: &mut World, pos: Vec2, kind: PickupKind) -> Entity {
         w.spawn((
-            ShieldPickup { t: 0.0, sway: 0.0 },
+            Pickup {
+                kind,
+                t: 0.0,
+                sway: 0.0,
+            },
             Pos(pos),
             Vel(Vec2::ZERO),
             Transform::default(),
         ))
         .id()
+    }
+
+    fn shield(w: &mut World, pos: Vec2) -> Entity {
+        pickup(w, pos, PickupKind::Shield)
     }
 
     fn step(w: &mut World) {
@@ -167,11 +242,28 @@ mod tests {
     }
 
     #[test]
+    fn catching_a_powerup_starts_it() {
+        let mut w = world(Vec2::new(X, 100.0));
+        let p = pickup(
+            &mut w,
+            Vec2::new(X, 100.0),
+            PickupKind::Power(Power::WideBeam),
+        );
+        step(&mut w);
+        assert!(w.get_entity(p).is_err());
+        let g = w.resource::<Game>();
+        assert!(g.power_on(Power::WideBeam));
+        assert!(!g.power_on(Power::Speed));
+        assert_eq!(g.shields, 0);
+    }
+
+    #[test]
     fn hives_and_elites_drop_more_often() {
         assert!(drop_chance(Kind::Hive, false) > drop_chance(Kind::Harvester, false));
         assert_eq!(
             drop_chance(Kind::Harvester, true),
             2.0 * drop_chance(Kind::Harvester, false)
         );
+        assert!(power_drop_chance(Kind::Hive, false) > power_drop_chance(Kind::Wraith, false));
     }
 }

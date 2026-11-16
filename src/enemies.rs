@@ -170,7 +170,7 @@ pub fn enemy_ai(
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
-    let dt = time.delta_secs();
+    let dt = time.delta_secs() * game.enemy_time_scale();
     let planet = game.phase == Phase::Planet;
 
     for (e, mut en, mut pos, mut vel, mut tf) in &mut q {
@@ -400,7 +400,7 @@ pub fn update_shots(
     mut commands: Commands,
     mut q: Query<(Entity, &mut EShot, &Pos, &mut Transform)>,
 ) {
-    let dt = time.delta_secs();
+    let dt = time.delta_secs() * game.enemy_time_scale();
     for (e, mut s, pos, mut tf) in &mut q {
         s.life -= dt;
         let grounded = game.phase == Phase::Planet && pos.0.y < terrain::height(pos.0.x);
@@ -414,6 +414,7 @@ pub fn update_shots(
 /// Ship against enemies and their shots.
 pub fn player_collisions(
     mut commands: Commands,
+    game: Res<Game>,
     player: Query<(&Player, &Pos)>,
     enemies: Query<(Entity, &Pos, &Enemy)>,
     shots: Query<(Entity, &Pos), With<EShot>>,
@@ -423,12 +424,16 @@ pub fn player_collisions(
     let Ok((p, pos)) = player.single() else {
         return;
     };
-    if p.invuln > 0.0 {
+    // While invincible the ship rams enemies and shrugs off shots.
+    let invincible = game.power_on(Power::Invincible);
+    if p.invuln > 0.0 && !invincible {
         return;
     }
     for (e, epos, en) in &enemies {
         if en.warp <= 0.0 && delta(pos.0, epos.0).length() < en.radius + PLAYER_RADIUS {
-            hit.write(PlayerHit);
+            if !invincible {
+                hit.write(PlayerHit);
+            }
             dmg.write(Damage {
                 entity: e,
                 amount: 999,
@@ -437,7 +442,9 @@ pub fn player_collisions(
     }
     for (e, spos) in &shots {
         if delta(pos.0, spos.0).length() < PLAYER_RADIUS + 3.0 {
-            hit.write(PlayerHit);
+            if !invincible {
+                hit.write(PlayerHit);
+            }
             commands.entity(e).try_despawn();
         }
     }
@@ -452,12 +459,16 @@ pub fn apply_damage(
     mut cam: ResMut<GameCam>,
     mut reader: MessageReader<Damage>,
     mut q: Query<(&mut Enemy, &Pos)>,
-    falling_shields: Query<(), With<pickups::ShieldPickup>>,
+    falling_pickups: Query<&pickups::Pickup>,
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
-    // Counted here as well as queried: shields spawned this frame are not in the query yet.
-    let mut falling = falling_shields.iter().count();
+    // Counted here as well as queried: pickups spawned this frame are not in the query yet.
+    let mut falling = falling_pickups
+        .iter()
+        .filter(|p| p.kind == pickups::PickupKind::Shield)
+        .count();
+    let mut falling_powers = falling_pickups.iter().count() - falling;
     for d in reader.read() {
         let Ok((mut en, pos)) = q.get_mut(d.entity) else {
             continue;
@@ -488,6 +499,11 @@ pub fn apply_damage(
         if falling < SHIELD_FALLING_MAX && rng.f32() < pickups::drop_chance(en.kind, en.elite) {
             pickups::spawn_shield(&mut commands, &art, &mut rng, pos.0);
             falling += 1;
+        } else if falling_powers < POWER_FALLING_MAX
+            && rng.f32() < pickups::power_drop_chance(en.kind, en.elite)
+        {
+            pickups::spawn_power(&mut commands, &art, &mut rng, pos.0);
+            falling_powers += 1;
         }
         cam.shake = cam.shake.max(0.22);
         sfx.write(if en.kind == Kind::Hive {
@@ -545,6 +561,7 @@ mod tests {
             stinger: pair(),
             stalker: pair(),
             shield: Handle::default(),
+            power: Default::default(),
         }
     }
 
@@ -663,5 +680,35 @@ mod tests {
         w.run_system_once(apply_damage).unwrap();
         assert_eq!(kinds(&mut w), vec![Kind::Hive]);
         assert_eq!(w.resource::<Game>().score, 0);
+    }
+
+    /// Ship and an enemy in the same place; returns (hits on the ship, damage messages).
+    fn ram(invincible: bool) -> (usize, usize) {
+        let mut w = world();
+        w.init_resource::<Messages<PlayerHit>>();
+        if invincible {
+            w.resource_mut::<Game>().grant_power(Power::Invincible);
+        }
+        let at = Vec2::new(500.0, 0.0);
+        w.spawn((
+            Player {
+                facing: 1.0,
+                invuln: 0.0,
+                fire_cd: 0.0,
+                missile_cd: 0.0,
+            },
+            Pos(at),
+        ));
+        spawn(&mut w, Kind::Harvester, at);
+        w.run_system_once(player_collisions).unwrap();
+        let hits = w.resource_mut::<Messages<PlayerHit>>().drain().count();
+        let dmg = w.resource_mut::<Messages<Damage>>().drain().count();
+        (hits, dmg)
+    }
+
+    #[test]
+    fn an_invincible_ship_rams_enemies_without_being_hit() {
+        assert_eq!(ram(false), (1, 1));
+        assert_eq!(ram(true), (0, 1));
     }
 }

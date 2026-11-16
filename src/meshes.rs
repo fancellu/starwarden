@@ -9,6 +9,7 @@ use bevy::sprite_render::AlphaMode2d;
 use std::f32::consts::{PI, TAU};
 
 use crate::consts::*;
+use crate::state::Power;
 
 type P = (f32, f32);
 
@@ -188,6 +189,8 @@ pub struct Art {
     pub stalker: [Handle<Mesh>; 2],
     /// A falling shield pickup.
     pub shield: Handle<Mesh>,
+    /// Falling powerup capsules, indexed by `Power as usize`.
+    pub power: [Handle<Mesh>; Power::COUNT],
 }
 
 fn dim(c: LinearRgba, f: f32) -> LinearRgba {
@@ -418,6 +421,104 @@ fn shield() -> Mesh {
     s.build()
 }
 
+/// A powerup waiting to be caught: a coin in the powerup's colour with its own symbol, so the
+/// kinds can be told apart by shape as well as colour.
+fn power(p: Power) -> Mesh {
+    let c = p.color();
+    let w = C_WHITE;
+    let mut s = Shape::default();
+    // The coin: a dark disc with a bright rim.
+    s.circle((0.0, 0.0), 14.0, 20, dim(c, 0.18), dim(c, 0.06));
+    s.ring((0.0, 0.0), 12.5, 14.5, 20, 0.0, c, dim(c, 0.6));
+    match p {
+        // Double chevron pointing ahead.
+        Power::Speed => {
+            for x in [-5.0, 2.0] {
+                s.quad(
+                    [
+                        (x - 4.0, 7.0),
+                        (x - 0.5, 7.0),
+                        (x + 5.0, 0.0),
+                        (x + 1.5, 0.0),
+                    ],
+                    [c, c, w, w],
+                );
+                s.quad(
+                    [
+                        (x + 1.5, 0.0),
+                        (x + 5.0, 0.0),
+                        (x - 0.5, -7.0),
+                        (x - 4.0, -7.0),
+                    ],
+                    [w, w, c, c],
+                );
+            }
+        }
+        // Five-pointed star.
+        Power::Invincible => {
+            let pts: Vec<P> = (0..10)
+                .map(|i| {
+                    let a = PI / 2.0 + i as f32 * PI / 5.0;
+                    let r = if i % 2 == 0 { 10.5 } else { 4.3 };
+                    (a.cos() * r, a.sin() * r)
+                })
+                .collect();
+            s.fan((0.0, 0.0), &pts, w, c);
+        }
+        // A thick beam between two thin ones.
+        Power::WideBeam => {
+            s.quad(
+                [(-10.0, -2.8), (10.0, -2.8), (10.0, 2.8), (-10.0, 2.8)],
+                [c, c, c, c],
+            );
+            s.quad(
+                [(-8.0, -1.2), (8.0, -1.2), (8.0, 1.2), (-8.0, 1.2)],
+                [w, w, w, w],
+            );
+            for y in [-6.5, 6.5] {
+                s.quad(
+                    [
+                        (-7.0, y - 1.0),
+                        (7.0, y - 1.0),
+                        (7.0, y + 1.0),
+                        (-7.0, y + 1.0),
+                    ],
+                    [c, c, c, c],
+                );
+            }
+        }
+        // Lightning bolt.
+        Power::SuperSprint => {
+            // Two triangles whose flat sides overlap in the middle make the zig-zag.
+            s.fan((0.5, 2.0), &[(5.0, 11.0), (-5.0, -1.5), (2.0, -1.5)], w, c);
+            s.fan(
+                (-0.5, -2.0),
+                &[(-5.0, -11.0), (5.0, 1.5), (-2.0, 1.5)],
+                w,
+                c,
+            );
+        }
+        // Hourglass: caps, two glass bulbs, sand gathered at the bottom.
+        Power::TimeWarp => {
+            for y in [8.5, -8.5] {
+                s.quad(
+                    [
+                        (-7.5, y - 1.3),
+                        (7.5, y - 1.3),
+                        (7.5, y + 1.3),
+                        (-7.5, y + 1.3),
+                    ],
+                    [w, w, w, w],
+                );
+            }
+            s.poly(&[(-6.0, 7.2), (6.0, 7.2), (0.0, 0.0)], dim(c, 0.55));
+            s.poly(&[(-6.0, -7.2), (6.0, -7.2), (0.0, 0.0)], c);
+            s.poly(&[(-4.5, -7.2), (4.5, -7.2), (0.0, -3.0)], w);
+        }
+    }
+    s.build()
+}
+
 /// Soft radial falloff used for particles, stars, shots and nebula clouds.
 fn glow_image() -> Image {
     const N: u32 = 64;
@@ -479,5 +580,6 @@ pub fn setup_art(
         stinger,
         stalker,
         shield: meshes.add(shield()),
+        power: Power::ALL.map(|p| meshes.add(power(p))),
     });
 }

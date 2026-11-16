@@ -41,8 +41,17 @@ pub struct PlayerState {
 }
 
 /// Advances the sprint meter by `dt`. Returns the new meter, whether it is locked, and whether
-/// the ship is sprinting this frame.
-pub fn sprint_step(meter: f32, locked: bool, wanted: bool, dt: f32) -> (f32, bool, bool) {
+/// the ship is sprinting this frame. With `free` (super sprint) the meter does not drain.
+pub fn sprint_step(
+    meter: f32,
+    locked: bool,
+    wanted: bool,
+    free: bool,
+    dt: f32,
+) -> (f32, bool, bool) {
+    if free && wanted {
+        return (meter, false, true);
+    }
     let active = wanted && !locked && meter > 0.0;
     if active {
         let meter = (meter - SPRINT_DRAIN * dt).max(0.0);
@@ -106,7 +115,7 @@ pub fn spawn_player(commands: &mut Commands, art: &Art, pos: Vec2, facing: f32, 
 pub fn player_control(
     time: Res<Time>,
     input: Res<PlayerInput>,
-    game: Res<Game>,
+    mut game: ResMut<Game>,
     mut ps: ResMut<PlayerState>,
     mut q: Query<(
         &mut Player,
@@ -125,8 +134,17 @@ pub fn player_control(
         return;
     };
 
-    // The halo brightens a little with each shield held and pulses gently.
-    halo.color = if game.shields > 0 {
+    if game.tick_powers(dt) {
+        sfx.write(Sfx::PowerDown);
+    }
+    let invincible = game.power_on(Power::Invincible);
+
+    // Invincibility shows as a bright gold halo; otherwise the halo brightens a little with
+    // each shield held and pulses gently.
+    halo.color = if invincible {
+        let pulse = 0.75 + 0.25 * (time.elapsed_secs() * 9.0).sin();
+        with_alpha(C_AMBER, 0.35 * pulse)
+    } else if game.shields > 0 {
         let pulse = 0.85 + 0.15 * (time.elapsed_secs() * 3.0).sin();
         let strength = 0.10 + 0.02 * game.shields.min(SHIELD_MAX) as f32;
         with_alpha(C_CYAN, strength * pulse)
@@ -137,7 +155,9 @@ pub fn player_control(
     if input.mv.x.abs() > 0.15 {
         p.facing = input.mv.x.signum();
     }
-    let (meter, locked, sprinting) = sprint_step(ps.sprint, ps.sprint_locked, input.sprint, dt);
+    let super_sprint = game.power_on(Power::SuperSprint);
+    let (meter, locked, sprinting) =
+        sprint_step(ps.sprint, ps.sprint_locked, input.sprint, super_sprint, dt);
     if sprinting && !ps.sprinting {
         sfx.write(Sfx::Sprint);
     }
@@ -145,8 +165,19 @@ pub fn player_control(
     ps.sprint_locked = locked;
     ps.sprinting = sprinting;
 
-    // Each colonist carried makes the ship a little slower; sprinting makes it faster.
-    let load = carry_speed(ps.carried) * if sprinting { SPRINT_BOOST } else { 1.0 };
+    // Each colonist carried makes the ship a little slower; sprinting and the speed powerup
+    // make it faster.
+    let boost = match (sprinting, super_sprint) {
+        (false, _) => 1.0,
+        (true, false) => SPRINT_BOOST,
+        (true, true) => SUPER_SPRINT_BOOST,
+    };
+    let speed = if game.power_on(Power::Speed) {
+        POWER_SPEED
+    } else {
+        1.0
+    };
+    let load = carry_speed(ps.carried) * boost * speed;
     vel.0.x += input.mv.x * PLAYER_ACCEL * load * dt;
     vel.0.x *= (-PLAYER_DRAG * dt).exp();
     vel.0.x = vel.0.x.clamp(-PLAYER_MAX_VX * load, PLAYER_MAX_VX * load);
@@ -175,7 +206,8 @@ pub fn player_control(
     let sx = tf.scale.x + (p.facing - tf.scale.x) * smooth(18.0, dt);
     tf.scale.x = if sx.abs() < 0.05 { 0.05 * p.facing } else { sx };
     tf.rotation = Quat::from_rotation_z(vel.0.y * 0.0005 * p.facing);
-    let blink = p.invuln > 0.0 && ((time.elapsed_secs() * 14.0) as u32).is_multiple_of(2);
+    let blink =
+        p.invuln > 0.0 && !invincible && ((time.elapsed_secs() * 14.0) as u32).is_multiple_of(2);
     *vis = if blink {
         Visibility::Hidden
     } else {
@@ -185,10 +217,10 @@ pub fn player_control(
     let thrust = input.mv.x.abs();
     let flicker = 0.8 + 0.4 * (time.elapsed_secs() * 60.0).sin();
     // The flame stretches while sprinting.
-    let boost = if sprinting { 1.7 } else { 1.0 };
+    let stretch = if sprinting { 1.7 } else { 1.0 };
     for mut f in &mut flame {
-        f.scale.x = (0.25 + thrust * 1.1) * flicker * boost;
-        f.scale.y = (0.7 + thrust * 0.5) * boost.sqrt();
+        f.scale.x = (0.25 + thrust * 1.1) * flicker * stretch;
+        f.scale.y = (0.7 + thrust * 0.5) * stretch.sqrt();
     }
     if thrust > 0.3 {
         fx.write(Fx::new(
@@ -220,7 +252,7 @@ pub fn player_death(
     let Ok((e, mut p, pos)) = q.single_mut() else {
         return;
     };
-    if p.invuln > 0.0 {
+    if p.invuln > 0.0 || game.power_on(Power::Invincible) {
         return;
     }
     game.break_combo();
@@ -239,6 +271,7 @@ pub fn player_death(
     sfx.write(Sfx::PlayerDie);
     cam.shake = 1.4;
     game.lives = game.lives.saturating_sub(1);
+    game.clear_powers();
     ps.alive = false;
     ps.carried = 0;
     ps.vel = Vec2::ZERO;
@@ -327,6 +360,20 @@ mod tests {
         assert_eq!(w.resource::<Game>().lives, START_LIVES - 1);
         assert!(!w.resource::<PlayerState>().alive);
     }
+
+    #[test]
+    fn invincibility_ignores_hits_and_a_lost_ship_loses_its_powers() {
+        let (mut w, ship) = world(0);
+        w.resource_mut::<Game>().grant_power(Power::Invincible);
+        w.run_system_once(player_death).unwrap();
+        assert!(w.get_entity(ship).is_ok());
+
+        let (mut w, ship) = world(0);
+        w.resource_mut::<Game>().grant_power(Power::Speed);
+        w.run_system_once(player_death).unwrap();
+        assert!(w.get_entity(ship).is_err());
+        assert!(!w.resource::<Game>().power_on(Power::Speed));
+    }
 }
 
 #[cfg(test)]
@@ -335,24 +382,33 @@ mod sprint_tests {
 
     #[test]
     fn sprint_drains_while_held_and_refills_when_released() {
-        let (m, locked, active) = sprint_step(1.0, false, true, 1.0);
+        let (m, locked, active) = sprint_step(1.0, false, true, false, 1.0);
         assert!(active && !locked);
         assert!((m - (1.0 - SPRINT_DRAIN)).abs() < 1e-6);
-        let (m2, _, active) = sprint_step(m, false, false, 1.0);
+        let (m2, _, active) = sprint_step(m, false, false, false, 1.0);
         assert!(!active);
         assert!((m2 - (m + SPRINT_REFILL)).abs() < 1e-6);
-        assert_eq!(sprint_step(1.0, false, false, 10.0).0, 1.0);
+        assert_eq!(sprint_step(1.0, false, false, false, 10.0).0, 1.0);
     }
 
     #[test]
     fn empty_meter_locks_until_partly_refilled() {
-        let (m, locked, _) = sprint_step(0.1, false, true, 1.0);
+        let (m, locked, _) = sprint_step(0.1, false, true, false, 1.0);
         assert_eq!(m, 0.0);
         assert!(locked);
         // Still locked while held and below the resume level.
-        let (m, locked, active) = sprint_step(m, locked, true, 0.5);
+        let (m, locked, active) = sprint_step(m, locked, true, false, 0.5);
         assert!(!active && locked);
-        let (_, locked, _) = sprint_step(m, locked, true, SPRINT_RESUME / SPRINT_REFILL);
+        let (_, locked, _) = sprint_step(m, locked, true, false, SPRINT_RESUME / SPRINT_REFILL);
         assert!(!locked);
+    }
+
+    #[test]
+    fn super_sprint_does_not_drain_and_ignores_the_lock() {
+        let (m, locked, active) = sprint_step(0.5, false, true, true, 10.0);
+        assert!(active && !locked);
+        assert_eq!(m, 0.5);
+        let (_, locked, active) = sprint_step(0.0, true, true, true, 1.0);
+        assert!(active && !locked);
     }
 }

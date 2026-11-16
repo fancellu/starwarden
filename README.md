@@ -40,6 +40,25 @@ Destroyed enemies sometimes drop a **shield** (cyan hexagon; Hives most often). 
 it reaches the ground. Each shield held absorbs one hit that would otherwise cost a ship, and
 the ship glows while it has any. You can hold up to 9; catching one more scores 250 instead.
 
+More rarely an enemy drops a **powerup**: a coin with a symbol, so each kind can be told apart
+by shape as well as colour. Each lasts 10 seconds, and
+several can run at once; catching one already running starts its timer again. Active powerups
+and their seconds left are shown under the score. They are lost with the ship.
+
+| Powerup      | Symbol          | Colour  | Effect                                              |
+| ------------ | --------------- | ------- | --------------------------------------------------- |
+| SPEED        | double chevron  | green   | 35% faster                                          |
+| INVINCIBLE   | star            | amber   | 7 seconds of no damage; ram enemies to destroy them |
+| WIDE BEAM    | three bars      | magenta | a much taller laser that passes through enemies     |
+| SUPER SPRINT | lightning bolt  | blue    | sprint never runs out and is faster still           |
+| TIME WARP    | hourglass       | violet  | enemies and their shots move at 40% speed           |
+
+![A shield and the five powerups, each named](docs/powerups.png)
+
+| | |
+| --- | --- |
+| ![An invincible ship ramming a Harvester](docs/invincible.png) | ![The wide beam hitting a Hive during a time warp](docs/widebeam.png) |
+
 Kill quickly for a **combo**: every 5 kills in a row, each within 4 seconds of the last, raise
 the score multiplier for enemies by one, up to x5. Losing your ship or pausing too long between
 kills ends it.
@@ -187,7 +206,7 @@ For a guided tour of how the code works, see [docs/TUTORIAL.md](docs/TUTORIAL.md
 | `src/weapons.rs`    | Laser, homing missiles, smart bomb                              |
 | `src/enemies.rs`    | Enemy behaviour, enemy shots, damage and scoring                |
 | `src/colonists.rs`  | Walking, abduction, falling and rescue                          |
-| `src/pickups.rs`    | Shields dropped by enemies: falling, catching, fizzling out     |
+| `src/pickups.rs`    | Shields and powerups dropped by enemies: falling and catching   |
 | `src/waves.rs`      | Wave contents and progression, the void phase, new games        |
 | `src/terrain.rs`    | Planet surface height function and mesh                         |
 | `src/background.rs` | Sky, nebula and parallax stars                                  |
@@ -214,8 +233,10 @@ STARWARDEN_DEMO=./shots cargo run
 Optional extras: `STARWARDEN_DEMO_SECS=60` sets the run length, `STARWARDEN_DEMO_EVERY=0.08`
 sets the seconds between screenshots (default 2.5), `STARWARDEN_DEMO_VOID=1` forces the void
 phase, `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type, and `STARWARDEN_DEMO_CARRY=1`
-catches three falling colonists, carries them and sets them down together (use about 22 seconds). The output folder must
-already exist.
+catches three falling colonists, carries them and sets them down together (use about 22 seconds).
+`STARWARDEN_DEMO_POWER=1` drops each powerup in turn above the ship, one every 6 seconds (use
+about 36 seconds); together with `STARWARDEN_DEMO_GALLERY=1` it lines up a shield and every
+powerup, each named, 7 seconds in. The output folder must already exist.
 
 The images in `docs/` were made this way. The animation is the frames of a run at 0.08 s
 intervals joined with ffmpeg:

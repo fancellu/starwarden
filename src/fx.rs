@@ -278,15 +278,20 @@ pub fn spawn_fx(
                     );
                 }
             }
-            FxKind::Score(pts) => {
+            FxKind::Score(_) | FxKind::Label(_) => {
+                let (text, life, size) = match f.kind {
+                    FxKind::Score(pts) => (pts.to_string(), 1.1, 18.0),
+                    FxKind::Label(s) => (s.to_string(), 1.6, 20.0),
+                    _ => unreachable!(),
+                };
                 commands.spawn((
-                    Popup { life: 1.1 },
+                    Popup { life },
                     GameEntity,
                     Pos(f.pos + Vec2::new(0.0, 18.0)),
                     Vel(Vec2::new(0.0, 46.0)),
-                    Text2d::new(pts.to_string()),
+                    Text2d::new(text),
                     TextFont {
-                        font_size: FontSize::Px(18.0),
+                        font_size: FontSize::Px(size),
                         ..default()
                     },
                     TextColor(col(f.color)),

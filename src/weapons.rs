@@ -14,6 +14,9 @@ use crate::world::*;
 #[derive(Component)]
 pub struct Bolt {
     pub life: f32,
+    /// Wide-beam bolts pierce: they keep going and remember whom they hit.
+    pub wide: bool,
+    pub hits: Vec<Entity>,
 }
 
 #[derive(Component)]
@@ -49,14 +52,20 @@ pub fn fire_weapons(
         // The beam colour cycles so a held trigger paints a shifting ribbon.
         let t = (time.elapsed_secs() * 3.0).sin() * 0.5 + 0.5;
         let color = C_CYAN.mix(&C_MAGENTA, t);
+        let wide = game.power_on(Power::WideBeam);
+        let height = if wide { 2.6 * WIDE_BEAM } else { 2.6 };
         commands.spawn((
-            Bolt { life: LASER_LIFE },
+            Bolt {
+                life: LASER_LIFE,
+                wide,
+                hits: Vec::new(),
+            },
             GameEntity,
             Pos(pos.0 + Vec2::new(p.facing * (26.0 + LASER_HALF_LEN), -1.0)),
             Vel(Vec2::new(p.facing * LASER_SPEED + vel.0.x, 0.0)),
             Glow {
                 color,
-                size: Vec2::new(LASER_HALF_LEN * 2.0, 2.6),
+                size: Vec2::new(LASER_HALF_LEN * 2.0, height),
                 soft: false,
             },
         ));
@@ -124,19 +133,24 @@ pub fn update_bolts(
         // Fade out towards the end of the bolt's range.
         let a = (b.life / 0.12).min(1.0);
         glow.color.alpha = a;
+        let band = if b.wide { 3.0 * WIDE_BEAM } else { 3.0 };
         for (ee, epos, enemy) in &enemies {
-            if enemy.warp > 0.0 {
+            if enemy.warp > 0.0 || b.hits.contains(&ee) {
                 continue;
             }
             let d = delta(pos.0, epos.0);
-            if d.x.abs() < LASER_HALF_LEN + enemy.radius && d.y.abs() < enemy.radius + 3.0 {
+            if d.x.abs() < LASER_HALF_LEN + enemy.radius && d.y.abs() < enemy.radius + band {
                 dmg.write(Damage {
                     entity: ee,
                     amount: 1,
                 });
                 fx.write(Fx::new(epos.0, C_WHITE, FxKind::Spark));
-                commands.entity(e).try_despawn();
-                break;
+                if b.wide {
+                    b.hits.push(ee);
+                } else {
+                    commands.entity(e).try_despawn();
+                    break;
+                }
             }
         }
     }

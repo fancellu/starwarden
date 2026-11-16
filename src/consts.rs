@@ -79,6 +79,24 @@ pub const SHIELD_INVULN: f32 = 1.5;
 pub const SHIELD_HALO: f32 = 78.0;
 /// Points for catching a shield when already full.
 pub const SHIELD_FULL_POINTS: u32 = 250;
+/// Chance that a destroyed enemy drops a powerup (Hives use the higher value; elites double it).
+pub const POWER_DROP: f32 = 0.04;
+pub const POWER_DROP_HIVE: f32 = 0.15;
+/// Most powerups falling at once.
+pub const POWER_FALLING_MAX: usize = 1;
+/// Seconds each powerup lasts (invincibility is shorter).
+pub const POWER_TIME: f32 = 10.0;
+pub const POWER_INVINCIBLE_TIME: f32 = 7.0;
+/// Speed and acceleration multiplier from the speed powerup.
+pub const POWER_SPEED: f32 = 1.35;
+/// Sprint boost while super sprint is active (the meter does not drain).
+pub const SUPER_SPRINT_BOOST: f32 = 2.0;
+/// How much taller the laser's hit band is under the wide beam.
+pub const WIDE_BEAM: f32 = 4.0;
+/// Speed enemies and their shots run at during a time warp.
+pub const TIME_WARP: f32 = 0.4;
+/// Seconds before the end of a powerup when its HUD timer starts to blink.
+pub const POWER_WARN: f32 = 2.0;
 
 // --- Weapons ----------------------------------------------------------------------------------
 pub const LASER_COOLDOWN: f32 = 0.085;

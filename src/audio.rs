@@ -219,6 +219,20 @@ fn synth(sfx: Sfx) -> Vec<f32> {
             })
         }
         Sfx::ExtraLife => arpeggio(&[784.0, 988.0, 1175.0, 1568.0, 1976.0, 2349.0], 0.07, 0.15),
+        Sfx::PowerUp => {
+            // A rising, wobbling sweep with a bright shimmer on top.
+            let (mut a, mut b, mut lfo) = (Osc::default(), Osc::default(), Osc::default());
+            render(0.7, |_, u| {
+                let wob = 1.0 + 0.04 * lfo.sine(18.0);
+                let f = lerp(220.0, 1320.0, u.powf(0.7)) * wob;
+                let env = (u * 12.0).min(1.0) * (1.0 - u).powf(0.9);
+                (a.square(f) * 0.25 + b.tri(f * 2.0) * 0.35) * env
+            })
+        }
+        Sfx::PowerDown => {
+            let mut a = Osc::default();
+            render(0.22, |_, u| a.tri(lerp(880.0, 330.0, u)) * 0.5 * (1.0 - u))
+        }
         Sfx::EnemyShot => {
             let mut a = Osc::default();
             render(0.16, |_, u| a.tri(lerp(420.0, 980.0, u)) * 0.45 * (1.0 - u))
@@ -284,7 +298,7 @@ pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
 
 // --- Playback ----------------------------------------------------------------------------------
 
-const ALL: [Sfx; 21] = [
+const ALL: [Sfx; 23] = [
     Sfx::Laser,
     Sfx::Missile,
     Sfx::Hit,
@@ -306,6 +320,8 @@ const ALL: [Sfx; 21] = [
     Sfx::ShieldUp,
     Sfx::ShieldHit,
     Sfx::Sprint,
+    Sfx::PowerUp,
+    Sfx::PowerDown,
 ];
 
 fn volume(sfx: Sfx) -> f32 {

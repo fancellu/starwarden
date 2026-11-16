@@ -117,11 +117,23 @@ pub fn update_view(window: Query<&Window, With<PrimaryWindow>>, mut view: ResMut
     }
 }
 
-/// Moves everything that has a velocity and keeps it on the cylinder.
-pub fn integrate(time: Res<Time>, mut q: Query<(&mut Pos, &Vel)>) {
+/// Moves everything that has a velocity and keeps it on the cylinder. Enemies and their shots
+/// move slower during a time warp.
+pub fn integrate(
+    time: Res<Time>,
+    game: Res<crate::state::Game>,
+    mut q: Query<(
+        &mut Pos,
+        &Vel,
+        Has<crate::enemies::Enemy>,
+        Has<crate::enemies::EShot>,
+    )>,
+) {
     let dt = time.delta_secs();
-    for (mut p, v) in &mut q {
-        p.0 += v.0 * dt;
+    let warp = game.enemy_time_scale();
+    for (mut p, v, enemy, shot) in &mut q {
+        let k = if enemy || shot { warp } else { 1.0 };
+        p.0 += v.0 * dt * k;
         p.0.x = wrap(p.0.x);
     }
 }
