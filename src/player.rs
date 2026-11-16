@@ -21,6 +21,10 @@ pub struct Player {
 #[derive(Component)]
 pub struct Flame;
 
+/// The dashed circle around the ship showing the magnet's reach.
+#[derive(Component)]
+pub struct MagnetRing;
+
 /// A snapshot of the ship that other systems (enemy AI, camera, colonists) read, so they do not
 /// need to query the player entity.
 #[derive(Resource)]
@@ -110,6 +114,45 @@ pub fn spawn_player(commands: &mut Commands, art: &Art, pos: Vec2, facing: f32, 
             Transform::from_xyz(-15.0, 0.0, -0.1),
         )],
     ));
+}
+
+/// Shows the magnet's reach while it is on: a slowly turning, gently pulsing dashed circle that
+/// blinks in the magnet's last seconds, like its HUD timer. It is its own entity rather than a
+/// child of the ship, so the ship's flip when it turns does not squash it.
+pub fn show_magnet_ring(
+    time: Res<Time>,
+    game: Res<Game>,
+    ps: Res<PlayerState>,
+    art: Res<Art>,
+    mut commands: Commands,
+    mut q: Query<(&mut Pos, &mut Visibility, &mut Transform), With<MagnetRing>>,
+) {
+    let left = game.powers[Power::Magnet as usize];
+    let t = time.elapsed_secs();
+    let blink_off = left < POWER_WARN && (t * 6.0).fract() < 0.5;
+    if q.is_empty() {
+        commands.spawn((
+            MagnetRing,
+            GameEntity,
+            Pos(ps.pos),
+            Mesh2d(art.magnet_ring.clone()),
+            MeshMaterial2d(art.mat.clone()),
+            // Just in front of the terrain, behind everything else.
+            Transform::from_xyz(0.0, ps.pos.y, Z_TERRAIN + 1.0),
+            Visibility::Hidden,
+        ));
+    }
+    for (mut pos, mut vis, mut tf) in &mut q {
+        pos.0 = ps.pos;
+        let on = ps.alive && left > 0.0 && !blink_off;
+        vis.set_if_neq(if on {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
+        tf.rotation = Quat::from_rotation_z(t * 0.25);
+        tf.scale = Vec3::splat(1.0 + 0.012 * (t * 4.0).sin());
+    }
 }
 
 pub fn player_control(

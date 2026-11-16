@@ -181,6 +181,7 @@ fn main() {
             (fx::spawn_fx, fx::update_particles, fx::update_popups)
                 .chain()
                 .run_if(simulating),
+            player::show_magnet_ring,
             world::sync_transforms,
             fx::draw_glows,
             world::camera_shake,

@@ -191,6 +191,8 @@ pub struct Art {
     pub shield: Handle<Mesh>,
     /// Falling powerup capsules, indexed by `Power as usize`.
     pub power: [Handle<Mesh>; Power::COUNT],
+    /// Dashed circle around the ship showing the magnet's reach.
+    pub magnet_ring: Handle<Mesh>,
 }
 
 fn dim(c: LinearRgba, f: f32) -> LinearRgba {
@@ -515,6 +517,43 @@ fn power(p: Power) -> Mesh {
             s.poly(&[(-6.0, -7.2), (6.0, -7.2), (0.0, 0.0)], c);
             s.poly(&[(-4.5, -7.2), (4.5, -7.2), (0.0, -3.0)], w);
         }
+        // Horseshoe magnet, open end up, with white pole tips.
+        Power::Magnet => {
+            let (cy, r0, r1) = (-2.0, 3.5, 8.0);
+            let p = |a: f32, r: f32| (a.cos() * r, cy + a.sin() * r);
+            let n = 8;
+            for i in 0..n {
+                let a0 = PI + i as f32 / n as f32 * PI;
+                let a1 = PI + (i + 1) as f32 / n as f32 * PI;
+                s.quad([p(a0, r0), p(a0, r1), p(a1, r1), p(a1, r0)], [c, c, c, c]);
+            }
+            for (x0, x1) in [(-r1, -r0), (r0, r1)] {
+                s.quad([(x0, cy), (x1, cy), (x1, 4.0), (x0, 4.0)], [c, c, c, c]);
+                s.quad([(x0, 4.0), (x1, 4.0), (x1, 8.0), (x0, 8.0)], [w, w, w, w]);
+            }
+        }
+    }
+    s.build()
+}
+
+/// Dashed circle of radius `MAGNET_REACH`, drawn around the ship while the magnet is on.
+fn magnet_ring() -> Mesh {
+    const DASHES: usize = 40;
+    let c = dim(C_RED, 0.35);
+    let mut s = Shape::default();
+    for i in 0..DASHES {
+        let a0 = i as f32 / DASHES as f32 * TAU;
+        let a1 = a0 + 0.55 * TAU / DASHES as f32;
+        let p = |a: f32, r: f32| (a.cos() * r, a.sin() * r);
+        s.quad(
+            [
+                p(a0, MAGNET_REACH - 1.5),
+                p(a0, MAGNET_REACH + 1.5),
+                p(a1, MAGNET_REACH + 1.5),
+                p(a1, MAGNET_REACH - 1.5),
+            ],
+            [c, c, c, c],
+        );
     }
     s.build()
 }
@@ -581,5 +620,6 @@ pub fn setup_art(
         stalker,
         shield: meshes.add(shield()),
         power: Power::ALL.map(|p| meshes.add(power(p))),
+        magnet_ring: meshes.add(magnet_ring()),
     });
 }

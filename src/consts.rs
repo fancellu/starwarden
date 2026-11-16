@@ -95,6 +95,11 @@ pub const SUPER_SPRINT_BOOST: f32 = 2.0;
 pub const WIDE_BEAM: f32 = 4.0;
 /// Speed enemies and their shots run at during a time warp.
 pub const TIME_WARP: f32 = 0.4;
+/// Distance within which the magnet pulls in falling pickups and colonists, and snatches
+/// colonists from Harvesters.
+pub const MAGNET_REACH: f32 = 300.0;
+/// Speed at which the magnet pulls things toward the ship.
+pub const MAGNET_PULL: f32 = 420.0;
 /// Seconds before the end of a powerup when its HUD timer starts to blink.
 pub const POWER_WARN: f32 = 2.0;
 

@@ -6,7 +6,7 @@
 //! `STARWARDEN_DEMO_CARRY=1` instead clears the enemies, knocks three colonists loose high up,
 //! catches them, carries them for a while and sets them down together (use about 22 seconds).
 //! `STARWARDEN_DEMO_POWER=1` drops each powerup in turn near the ship, one every 6 seconds from
-//! 3 s, for the pilot to catch (use about 36 seconds). With `STARWARDEN_DEMO_GALLERY=1` as well,
+//! 3 s, for the pilot to catch (use about 42 seconds). With `STARWARDEN_DEMO_GALLERY=1` as well,
 //! it instead lines up a shield and every powerup, each named, above an idle ship.
 //! It does nothing unless the variable is set.
 
@@ -98,7 +98,7 @@ fn demo(
             let kinds = std::iter::once(PickupKind::Shield)
                 .chain(Power::ALL.into_iter().map(PickupKind::Power));
             for (i, kind) in kinds.enumerate() {
-                let at = ps.pos + Vec2::new(ps.facing * 200.0 + (i as f32 - 2.5) * 175.0, 110.0);
+                let at = ps.pos + Vec2::new(ps.facing * 240.0 + (i as f32 - 3.0) * 160.0, 110.0);
                 let name = match kind {
                     PickupKind::Shield => {
                         spawn_shield(&mut commands, &art, &mut rng, at);

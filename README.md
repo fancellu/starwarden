@@ -52,8 +52,13 @@ and their seconds left are shown under the score. They are lost with the ship.
 | WIDE BEAM    | three bars      | magenta | a much taller laser that passes through enemies     |
 | SUPER SPRINT | lightning bolt  | blue    | sprint never runs out and is faster still           |
 | TIME WARP    | hourglass       | violet  | enemies and their shots move at 40% speed           |
+| MAGNET       | horseshoe       | red     | pulls in nearby pickups and colonists (see below)   |
 
-![A shield and the five powerups, each named](docs/powerups.png)
+The magnet's reach is shown as a dashed red circle around the ship. Falling shields, powerups
+and colonists inside it are pulled straight to the ship, and a Harvester carrying a colonist
+inside it loses them to the magnet. Colonists walking on the ground are left alone.
+
+![A shield and the six powerups, each named](docs/powerups.png)
 
 | | |
 | --- | --- |
@@ -242,7 +247,7 @@ sets the seconds between screenshots (default 2.5), `STARWARDEN_DEMO_VOID=1` for
 phase, `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type, and `STARWARDEN_DEMO_CARRY=1`
 catches three falling colonists, carries them and sets them down together (use about 22 seconds).
 `STARWARDEN_DEMO_POWER=1` drops each powerup in turn above the ship, one every 6 seconds (use
-about 36 seconds); together with `STARWARDEN_DEMO_GALLERY=1` it lines up a shield and every
+about 42 seconds); together with `STARWARDEN_DEMO_GALLERY=1` it lines up a shield and every
 powerup, each named, 7 seconds in. The output folder must already exist.
 
 The images in `docs/` were made this way. The animation is the frames of a run at 0.08 s

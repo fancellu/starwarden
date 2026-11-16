@@ -562,6 +562,7 @@ mod tests {
             stalker: pair(),
             shield: Handle::default(),
             power: Default::default(),
+            magnet_ring: Handle::default(),
         }
     }
 

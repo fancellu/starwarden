@@ -119,9 +119,15 @@ pub fn update_pickups(
 ) {
     let dt = time.delta_secs();
     let playing = *state.get() == GameState::Playing;
+    let magnet = playing && ps.alive && game.power_on(Power::Magnet);
     for (e, mut s, pos, mut vel, mut tf) in &mut q {
         s.t += dt;
-        vel.0.x = (s.t * 1.7 + s.sway).sin() * 22.0;
+        let to_ship = delta(pos.0, ps.pos);
+        if magnet && to_ship.length() < MAGNET_REACH {
+            vel.0 = to_ship.normalize_or_zero() * MAGNET_PULL;
+        } else {
+            vel.0 = Vec2::new((s.t * 1.7 + s.sway).sin() * 22.0, -SHIELD_FALL);
+        }
         // Shields spin; powerups only rock, so their symbols stay readable.
         let angle = match s.kind {
             PickupKind::Shield => s.t * 1.3,
@@ -255,6 +261,24 @@ mod tests {
         assert!(g.power_on(Power::WideBeam));
         assert!(!g.power_on(Power::Speed));
         assert_eq!(g.shields, 0);
+    }
+
+    #[test]
+    fn a_magnet_pulls_pickups_in() {
+        let mut w = world(Vec2::new(X, 300.0));
+        let near = shield(&mut w, Vec2::new(X + 200.0, 300.0));
+        let far = shield(&mut w, Vec2::new(X + MAGNET_REACH + 50.0, 300.0));
+        step(&mut w);
+        assert_eq!(
+            w.get::<Vel>(near).unwrap().0.y,
+            -SHIELD_FALL,
+            "no magnet, no pull"
+        );
+        w.resource_mut::<Game>().grant_power(Power::Magnet);
+        step(&mut w);
+        let v = w.get::<Vel>(near).unwrap().0;
+        assert!((v - Vec2::new(-MAGNET_PULL, 0.0)).length() < 0.01, "{v}");
+        assert_eq!(w.get::<Vel>(far).unwrap().0.y, -SHIELD_FALL, "out of reach");
     }
 
     #[test]

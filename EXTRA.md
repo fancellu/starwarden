@@ -3,6 +3,7 @@
 - [x] 1 Shields (drop from some defeated enemies, need to be picked up before they fall, can carry up to 9)
 - [x] 2 Sprint (right shoulder button, shift key)
 - [x] 3 Powerups (Speed, invincibility, fatter beam, super sprint, time warp)
+  - [x] Magnet, pulls in powerups and colonists
 
 ## Player and weapons
 
@@ -10,7 +11,8 @@
   or go too long without a kill.
 - 5 Overheat laser: holding fire builds heat; letting it cool just before the limit gives a
   short burst of stronger shots.
-- 6 Tractor beam: hold a button to pull a falling colonist or a dropped pickup toward the ship.
+- ~~6 Tractor beam: hold a button to pull a falling colonist or a dropped pickup toward the
+  ship.~~ Covered by the magnet powerup, with no extra button.
 - 7 Wingman drone: a small helper that follows the ship and shoots; lost when you are hit.
 - 8 Charged shot: hold fire with no targets to charge one piercing beam across the screen.
 - 9 Decoy flare: drop a beacon that draws Wraiths and Stalkers away for a few seconds.

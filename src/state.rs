@@ -73,16 +73,18 @@ pub enum Power {
     WideBeam,
     SuperSprint,
     TimeWarp,
+    Magnet,
 }
 
 impl Power {
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = 6;
     pub const ALL: [Power; Power::COUNT] = [
         Power::Speed,
         Power::Invincible,
         Power::WideBeam,
         Power::SuperSprint,
         Power::TimeWarp,
+        Power::Magnet,
     ];
 
     pub fn name(self) -> &'static str {
@@ -92,6 +94,7 @@ impl Power {
             Power::WideBeam => "WIDE BEAM",
             Power::SuperSprint => "SUPER SPRINT",
             Power::TimeWarp => "TIME WARP",
+            Power::Magnet => "MAGNET",
         }
     }
 
@@ -102,6 +105,7 @@ impl Power {
             Power::WideBeam => C_MAGENTA,
             Power::SuperSprint => C_BLUE,
             Power::TimeWarp => C_VIOLET,
+            Power::Magnet => C_RED,
         }
     }
 

@@ -145,6 +145,10 @@ Powerups are just timers in `Game::powers`, one per `Power`, so several can run 
 flight model for speed and super sprint, `fire_weapons` for the wide beam, `player_collisions`
 for invincibility. Time warp is a single number, `game.enemy_time_scale()`, which `enemy_ai`,
 `update_shots` and `integrate` multiply into their time step for enemies and enemy shots only.
+The magnet lives where the things it pulls are moved: `update_pickups` and `update_colonists`
+steer anything within `MAGNET_REACH` straight at the ship, and `update_colonists` also turns a
+colonist held by a Harvester back into a falling one. The Harvester's AI already copes with
+losing its colonist. `show_magnet_ring` draws the reach as a dashed circle that follows the ship.
 
 ## Enemies
 

@@ -77,6 +77,9 @@ pub fn update_colonists(
     let set_down_each = SET_DOWN_POINTS * aboard.min(CARRY_BONUS_MAX);
     let mut landed = 0;
     let mut carried = 0;
+    let magnet = ps.alive && game.power_on(Power::Magnet);
+    let ship = ps.pos;
+    let in_reach = |p: Vec2| magnet && delta(p, ship).length() < MAGNET_REACH;
     for (e, mut c, mut pos, mut tf) in &mut q {
         c.t += dt;
         if c.claimed_by.is_some_and(|h| enemies.get(h).is_err()) {
@@ -95,9 +98,18 @@ pub fn update_colonists(
                 tf.scale.x = c.dir;
             }
             CState::Abducted(h) => match enemies.get(h) {
-                Ok(hpos) => {
+                Ok(hpos) if !in_reach(pos.0) => {
                     pos.0 = hpos.0 + Vec2::new(0.0, -24.0);
                     tilt = (c.t * 14.0).sin() * 0.25;
+                }
+                Ok(_) => {
+                    // Snatched from the Harvester by the magnet; it then pulls them in.
+                    c.state = CState::Falling;
+                    c.claimed_by = None;
+                    c.fall_from = pos.0.y;
+                    c.vy = 0.0;
+                    fx.write(Fx::new(pos.0, C_RED, FxKind::Rescue));
+                    sfx.write(Sfx::Rescue);
                 }
                 Err(_) => {
                     // The captor was destroyed: start falling.
@@ -108,8 +120,19 @@ pub fn update_colonists(
                 }
             },
             CState::Falling => {
-                c.vy = (c.vy - 420.0 * dt).max(-FALL_SPEED);
-                pos.0.y += c.vy * dt;
+                if in_reach(pos.0) {
+                    // Pulled straight at the ship; if the magnet runs out, the fall starts
+                    // again from here.
+                    let to_ship = delta(pos.0, ps.pos);
+                    let step =
+                        to_ship.normalize_or_zero() * (MAGNET_PULL * dt).min(to_ship.length());
+                    pos.0 = Vec2::new(wrap(pos.0.x + step.x), pos.0.y + step.y);
+                    c.vy = 0.0;
+                    c.fall_from = pos.0.y;
+                } else {
+                    c.vy = (c.vy - 420.0 * dt).max(-FALL_SPEED);
+                    pos.0.y += c.vy * dt;
+                }
                 tilt = c.t * 5.0;
                 if ps.alive && delta(pos.0, ps.pos).length() < 30.0 {
                     c.state = CState::Carried;
@@ -270,6 +293,43 @@ mod tests {
         step(&mut w);
         assert_eq!(state(&w, e), Some(CState::Falling));
         assert_eq!(w.get::<Colonist>(e).unwrap().fall_from, 120.0);
+    }
+
+    #[test]
+    fn a_magnet_snatches_a_colonist_and_pulls_them_in_but_leaves_walkers() {
+        let mut w = world(Vec2::new(X, 400.0));
+        w.resource_mut::<Game>().grant_power(Power::Magnet);
+        w.insert_resource(Time::<()>::default());
+        let harvester = Enemy {
+            kind: crate::enemies::Kind::Harvester,
+            elite: false,
+            hp: 1,
+            radius: 20.0,
+            warp: 0.0,
+            t: 0.0,
+            fire_cd: 9.0,
+            ai: crate::enemies::Ai::Rise,
+            target: None,
+            aim: Vec2::ZERO,
+            timer: 0.0,
+            hit: 0.0,
+        };
+        let captor = w.spawn((harvester, Pos(Vec2::new(X, 224.0)))).id();
+        let held = colonist(&mut w, CState::Abducted(captor), 200.0, 0.0);
+        let walker = colonist(&mut w, CState::Walking, terrain::height(X) + 9.0, 0.0);
+        step(&mut w);
+        assert_eq!(state(&w, held), Some(CState::Falling), "snatched");
+        assert_eq!(state(&w, walker), Some(CState::Walking));
+
+        // Pulled up to the ship and caught, despite gravity.
+        let mut time = Time::<()>::default();
+        for _ in 0..60 {
+            time.advance_by(std::time::Duration::from_millis(16));
+            w.insert_resource(time);
+            step(&mut w);
+        }
+        assert_eq!(state(&w, held), Some(CState::Carried));
+        assert_eq!(state(&w, walker), Some(CState::Walking));
     }
 
     #[test]
