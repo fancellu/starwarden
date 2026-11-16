@@ -19,6 +19,7 @@ mod hud;
 mod input;
 mod menus;
 mod meshes;
+mod pickups;
 mod player;
 mod state;
 mod terrain;
@@ -145,6 +146,7 @@ fn main() {
                 .chain()
                 .run_if(simulating),
             enemies::player_collisions.run_if(playing),
+            pickups::update_pickups.run_if(simulating),
         )
             .chain()
             .in_set(Step::Collide),

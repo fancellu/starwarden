@@ -6,6 +6,7 @@ use crate::colonists::{CState, Colonist};
 use crate::consts::*;
 use crate::fx::Glow;
 use crate::meshes::Art;
+use crate::pickups;
 use crate::player::{Player, PlayerState};
 use crate::state::*;
 use crate::terrain;
@@ -451,9 +452,12 @@ pub fn apply_damage(
     mut cam: ResMut<GameCam>,
     mut reader: MessageReader<Damage>,
     mut q: Query<(&mut Enemy, &Pos)>,
+    falling_shields: Query<(), With<pickups::ShieldPickup>>,
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
+    // Counted here as well as queried: shields spawned this frame are not in the query yet.
+    let mut falling = falling_shields.iter().count();
     for d in reader.read() {
         let Ok((mut en, pos)) = q.get_mut(d.entity) else {
             continue;
@@ -480,6 +484,10 @@ pub fn apply_damage(
         }
         if game.add_score(pts) {
             sfx.write(Sfx::ExtraLife);
+        }
+        if falling < SHIELD_FALLING_MAX && rng.f32() < pickups::drop_chance(en.kind, en.elite) {
+            pickups::spawn_shield(&mut commands, &art, &mut rng, pos.0);
+            falling += 1;
         }
         cam.shake = cam.shake.max(0.22);
         sfx.write(if en.kind == Kind::Hive {
@@ -536,6 +544,7 @@ mod tests {
             hive: pair(),
             stinger: pair(),
             stalker: pair(),
+            shield: Handle::default(),
         }
     }
 

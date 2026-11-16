@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use crate::consts::*;
+use crate::fx::Glow;
 use crate::input::PlayerInput;
 use crate::meshes::Art;
 use crate::state::*;
@@ -64,6 +65,12 @@ pub fn spawn_player(commands: &mut Commands, art: &Art, pos: Vec2, facing: f32, 
         Vel(Vec2::ZERO),
         Mesh2d(art.ship.clone()),
         MeshMaterial2d(art.mat.clone()),
+        // Shield halo; invisible until the ship holds a shield.
+        Glow {
+            color: LinearRgba::NONE,
+            size: Vec2::splat(SHIELD_HALO),
+            soft: true,
+        },
         Transform::from_xyz(0.0, pos.y, Z_PLAYER).with_scale(Vec3::new(facing, 1.0, 1.0)),
         children![(
             Flame,
@@ -85,13 +92,23 @@ pub fn player_control(
         &mut Vel,
         &mut Transform,
         &mut Visibility,
+        &mut Glow,
     )>,
     mut flame: Query<&mut Transform, (With<Flame>, Without<Player>)>,
     mut fx: MessageWriter<Fx>,
 ) {
     let dt = time.delta_secs();
-    let Ok((mut p, mut pos, mut vel, mut tf, mut vis)) = q.single_mut() else {
+    let Ok((mut p, mut pos, mut vel, mut tf, mut vis, mut halo)) = q.single_mut() else {
         return;
+    };
+
+    // The halo brightens a little with each shield held and pulses gently.
+    halo.color = if game.shields > 0 {
+        let pulse = 0.85 + 0.15 * (time.elapsed_secs() * 3.0).sin();
+        let strength = 0.10 + 0.02 * game.shields.min(SHIELD_MAX) as f32;
+        with_alpha(C_CYAN, strength * pulse)
+    } else {
+        LinearRgba::NONE
     };
 
     if input.mv.x.abs() > 0.15 {
@@ -160,17 +177,28 @@ pub fn player_death(
     mut game: ResMut<Game>,
     mut ps: ResMut<PlayerState>,
     mut cam: ResMut<GameCam>,
-    q: Query<(Entity, &Player, &Pos)>,
+    mut q: Query<(Entity, &mut Player, &Pos)>,
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
     if hits.read().count() == 0 {
         return;
     }
-    let Ok((e, p, pos)) = q.single() else {
+    let Ok((e, mut p, pos)) = q.single_mut() else {
         return;
     };
     if p.invuln > 0.0 {
+        return;
+    }
+    game.break_combo();
+    if game.shields > 0 {
+        // A shield takes the hit instead of the ship.
+        game.shields -= 1;
+        p.invuln = SHIELD_INVULN;
+        fx.write(Fx::new(pos.0, C_CYAN, FxKind::Rescue));
+        fx.write(Fx::new(pos.0, C_CYAN, FxKind::Explosion));
+        sfx.write(Sfx::ShieldHit);
+        cam.shake = cam.shake.max(0.5);
         return;
     }
     commands.entity(e).try_despawn();
@@ -178,7 +206,6 @@ pub fn player_death(
     sfx.write(Sfx::PlayerDie);
     cam.shake = 1.4;
     game.lives = game.lives.saturating_sub(1);
-    game.break_combo();
     ps.alive = false;
     ps.carried = 0;
     ps.vel = Vec2::ZERO;
@@ -210,4 +237,59 @@ pub fn player_respawn(
     ps.pos = pos;
     ps.alive = true;
     spawn_player(&mut commands, &art, pos, ps.facing, 2.5);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+
+    fn world(shields: u32) -> (World, Entity) {
+        let mut w = World::new();
+        w.insert_resource(Game {
+            shields,
+            ..default()
+        });
+        w.insert_resource(PlayerState {
+            alive: true,
+            ..default()
+        });
+        w.init_resource::<GameCam>();
+        w.init_resource::<Messages<PlayerHit>>();
+        w.init_resource::<Messages<Fx>>();
+        w.init_resource::<Messages<Sfx>>();
+        let ship = w
+            .spawn((
+                Player {
+                    facing: 1.0,
+                    invuln: 0.0,
+                    fire_cd: 0.0,
+                    missile_cd: 0.0,
+                },
+                Pos(Vec2::new(100.0, 100.0)),
+            ))
+            .id();
+        w.resource_mut::<Messages<PlayerHit>>().write(PlayerHit);
+        (w, ship)
+    }
+
+    #[test]
+    fn a_shield_absorbs_the_hit() {
+        let (mut w, ship) = world(1);
+        w.run_system_once(player_death).unwrap();
+        assert!(w.get_entity(ship).is_ok());
+        assert_eq!(w.get::<Player>(ship).unwrap().invuln, SHIELD_INVULN);
+        assert_eq!(w.resource::<Game>().shields, 0);
+        assert_eq!(w.resource::<Game>().lives, START_LIVES);
+        assert!(w.resource::<PlayerState>().alive);
+    }
+
+    #[test]
+    fn without_a_shield_the_ship_is_lost() {
+        let (mut w, ship) = world(0);
+        w.run_system_once(player_death).unwrap();
+        assert!(w.get_entity(ship).is_err());
+        assert_eq!(w.resource::<Game>().lives, START_LIVES - 1);
+        assert!(!w.resource::<PlayerState>().alive);
+    }
 }

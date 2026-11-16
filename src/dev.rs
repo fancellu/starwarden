@@ -15,6 +15,7 @@ use crate::consts::TOP_Y;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
 use crate::input::PlayerInput;
 use crate::meshes::Art;
+use crate::pickups::ShieldPickup;
 use crate::player::PlayerState;
 use crate::world::Rng;
 use crate::world::{delta, Pos};
@@ -70,6 +71,7 @@ fn demo(
     mut last: Local<f32>,
     mut colonists: Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
     enemies: Query<(Entity, &Pos), With<Enemy>>,
+    shields: Query<&Pos, (With<ShieldPickup>, Without<Colonist>)>,
     ps: Res<PlayerState>,
     art: Res<Art>,
     mut rng: ResMut<Rng>,
@@ -109,16 +111,33 @@ fn demo(
         }
     } else if demo.carry {
         if t > 1.5 {
-            carry_demo(t, &crossed, &mut commands, &mut input, &mut colonists, &enemies, &ps);
+            carry_demo(
+                t,
+                &crossed,
+                &mut commands,
+                &mut input,
+                &mut colonists,
+                &enemies,
+                &ps,
+            );
         }
     } else if t > 1.5 {
-        // Fly at the nearest enemy, then hold station a little way off and shoot.
+        // Go for a nearby falling shield; otherwise fly at the nearest enemy, then hold
+        // station a little way off and shoot.
+        let shield = shields
+            .iter()
+            .map(|p| delta(ps.pos, p.0))
+            .filter(|d| d.length() < 300.0)
+            .min_by(|a, b| a.length().total_cmp(&b.length()));
         let nearest = enemies
             .iter()
             .map(|(_, p)| delta(ps.pos, p.0))
             .min_by(|a, b| a.length().total_cmp(&b.length()));
-        match nearest {
-            Some(d) => {
+        match (shield, nearest) {
+            (Some(d), _) => {
+                input.mv = Vec2::new((d.x / 60.0).clamp(-1.0, 1.0), (d.y / 30.0).clamp(-1.0, 1.0));
+            }
+            (None, Some(d)) => {
                 input.mv.x = if d.x.abs() > 320.0 {
                     d.x.signum()
                 } else if d.x.abs() < 140.0 {
@@ -128,7 +147,7 @@ fn demo(
                 };
                 input.mv.y = (d.y / 30.0).clamp(-1.0, 1.0);
             }
-            None => input.mv.x = 1.0,
+            (None, None) => input.mv.x = 1.0,
         }
         input.fire = true;
         input.missile = (t * 1.2).fract() < 0.05;

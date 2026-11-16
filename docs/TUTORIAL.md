@@ -135,7 +135,9 @@ and `apply_damage` in `enemies.rs` is where enemies are destroyed. Scoring, expl
 the Hive bursting into Stingers therefore happen in one place, whatever did the damage:
 laser, missile, smart bomb or ramming the ship. That is also where each kill feeds the combo
 multiplier kept on `Game` (`register_kill`, `multiplier`); `run_waves` runs its timer down and
-`player_death` ends it.
+`player_death` ends it. It also rolls for a shield drop: [`src/pickups.rs`](../src/pickups.rs)
+spawns a falling `ShieldPickup` that the ship can catch. When the ship is hit, `player_death`
+spends a shield (and grants a moment of invulnerability) before it considers losing a ship.
 
 ## Enemies
 

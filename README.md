@@ -35,6 +35,10 @@ where you started. The scanner at the top of the screen shows the whole world.
 Weapons: a rapid-fire laser, a limited stock of homing missiles (two more each wave) and smart
 bombs that destroy everything on screen. Every 10,000 points earns an extra ship and bomb.
 
+Destroyed enemies sometimes drop a **shield** (cyan hexagon; Hives most often). Catch it before
+it reaches the ground. Each shield held absorbs one hit that would otherwise cost a ship, and
+the ship glows while it has any. You can hold up to 9; catching one more scores 250 instead.
+
 Kill quickly for a **combo**: every 5 kills in a row, each within 4 seconds of the last, raise
 the score multiplier for enemies by one, up to x5. Losing your ship or pausing too long between
 kills ends it.
@@ -177,6 +181,7 @@ For a guided tour of how the code works, see [docs/TUTORIAL.md](docs/TUTORIAL.md
 | `src/weapons.rs`    | Laser, homing missiles, smart bomb                              |
 | `src/enemies.rs`    | Enemy behaviour, enemy shots, damage and scoring                |
 | `src/colonists.rs`  | Walking, abduction, falling and rescue                          |
+| `src/pickups.rs`    | Shields dropped by enemies: falling, catching, fizzling out     |
 | `src/waves.rs`      | Wave contents and progression, the void phase, new games        |
 | `src/terrain.rs`    | Planet surface height function and mesh                         |
 | `src/background.rs` | Sky, nebula and parallax stars                                  |

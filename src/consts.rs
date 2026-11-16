@@ -50,6 +50,25 @@ pub const CARRY_MIN_SPEED: f32 = 0.6;
 pub const SET_DOWN_POINTS: u32 = 500;
 /// Highest set-down multiplier.
 pub const CARRY_BONUS_MAX: u32 = 5;
+/// Most shields the ship can hold.
+pub const SHIELD_MAX: u32 = 9;
+/// Chance that a destroyed enemy drops a shield (Hives use the higher value; elites double it).
+pub const SHIELD_DROP: f32 = 0.10;
+pub const SHIELD_DROP_HIVE: f32 = 0.40;
+/// Most shields falling at once.
+pub const SHIELD_FALLING_MAX: usize = 3;
+/// Downward speed of a falling shield.
+pub const SHIELD_FALL: f32 = 45.0;
+/// How close the ship must be to catch a shield.
+pub const SHIELD_REACH: f32 = 28.0;
+/// Seconds before a shield falling in the void (where there is no ground) fizzles out.
+pub const SHIELD_LIFE_VOID: f32 = 8.0;
+/// Invulnerability after a shield absorbs a hit.
+pub const SHIELD_INVULN: f32 = 1.5;
+/// Size of the glow around the ship while it holds shields.
+pub const SHIELD_HALO: f32 = 78.0;
+/// Points for catching a shield when already full.
+pub const SHIELD_FULL_POINTS: u32 = 250;
 
 // --- Weapons ----------------------------------------------------------------------------------
 pub const LASER_COOLDOWN: f32 = 0.085;

@@ -7,6 +7,7 @@ use crate::colonists::{CState, Colonist};
 use crate::consts::*;
 use crate::enemies::{Enemy, Kind};
 use crate::input::{page_zoom, stick_range, touch_layout, TouchState};
+use crate::pickups::ShieldPickup;
 use crate::player::PlayerState;
 use crate::state::*;
 use crate::terrain;
@@ -226,20 +227,25 @@ pub fn update_hud(
         );
     }
     if let Ok(mut t) = status.single_mut() {
+        // Two right-aligned columns; the font is monospaced, so padding lines them up.
+        let row = |a: String, b: String| format!("{a:>12}   {b:>16}");
         let people = if game.phase == Phase::Planet {
             let carrying = match ps.carried {
                 0 => String::new(),
-                n => format!("   CARRYING {n} (x{})", n.min(CARRY_BONUS_MAX)),
+                n => format!("(x{}) CARRYING {n}", n.min(CARRY_BONUS_MAX)),
             };
-            format!("COLONISTS {}{carrying}", colonists.iter().count())
+            row(format!("COLONISTS {}", colonists.iter().count()), carrying)
         } else {
             format!("VOID - {} WAVES TO REBUILD", game.void_waves_left)
         };
         set_text(
             &mut t,
             format!(
-                "WAVE {}\nSHIPS {}   BOMBS {}   MISSILES {}\n{}",
-                game.wave, game.lives, game.bombs, game.missiles, people
+                "WAVE {}\n{}\n{}\n{}",
+                game.wave,
+                row(format!("SHIPS {}", game.lives), format!("SHIELDS {}", game.shields)),
+                row(format!("BOMBS {}", game.bombs), format!("MISSILES {}", game.missiles)),
+                people
             ),
         );
     }
@@ -281,6 +287,7 @@ pub fn draw_overlays(
     ps: Res<PlayerState>,
     enemies: Query<(&Pos, &Enemy)>,
     colonists: Query<(&Pos, &Colonist)>,
+    shields: Query<&Pos, With<ShieldPickup>>,
 ) {
     if *state.get() == GameState::Title {
         return;
@@ -357,6 +364,9 @@ pub fn draw_overlays(
         let c = en.kind.color(en.elite);
         let half = if en.kind == Kind::Stinger { 1.0 } else { 2.0 };
         dash(&mut gizmos, map(pos.0), half, c);
+    }
+    for pos in &shields {
+        dash(&mut gizmos, map(pos.0), 1.5, C_CYAN);
     }
     if ps.alive {
         let p = map(ps.pos);

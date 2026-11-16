@@ -186,6 +186,8 @@ pub struct Art {
     pub hive: [Handle<Mesh>; 2],
     pub stinger: [Handle<Mesh>; 2],
     pub stalker: [Handle<Mesh>; 2],
+    /// A falling shield pickup.
+    pub shield: Handle<Mesh>,
 }
 
 fn dim(c: LinearRgba, f: f32) -> LinearRgba {
@@ -408,6 +410,14 @@ fn stalker(elite: bool) -> Mesh {
     s.build()
 }
 
+/// A cyan hexagon with a bright core: a shield waiting to be caught.
+fn shield() -> Mesh {
+    let mut s = Shape::default();
+    s.ring((0.0, 0.0), 7.5, 10.5, 6, PI / 6.0, C_CYAN_DIM, C_CYAN);
+    s.circle((0.0, 0.0), 4.5, 6, C_WHITE, C_CYAN);
+    s.build()
+}
+
 /// Soft radial falloff used for particles, stars, shots and nebula clouds.
 fn glow_image() -> Image {
     const N: u32 = 64;
@@ -468,5 +478,6 @@ pub fn setup_art(
         hive,
         stinger,
         stalker,
+        shield: meshes.add(shield()),
     });
 }

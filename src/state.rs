@@ -59,6 +59,8 @@ pub struct Game {
     pub combo: u32,
     /// Seconds left to make the next kill before the combo ends.
     pub combo_timer: f32,
+    /// Hits the ship can take without being destroyed.
+    pub shields: u32,
 }
 
 impl Default for Game {
@@ -79,6 +81,7 @@ impl Default for Game {
             over_time: 0.0,
             combo: 0,
             combo_timer: 0.0,
+            shields: 0,
         }
     }
 }
@@ -134,6 +137,15 @@ impl Game {
         self.combo = 0;
         self.combo_timer = 0.0;
     }
+
+    /// Adds a shield; returns false when the ship already holds `SHIELD_MAX`.
+    pub fn add_shield(&mut self) -> bool {
+        if self.shields >= SHIELD_MAX {
+            return false;
+        }
+        self.shields += 1;
+        true
+    }
 }
 
 /// Large centre-screen announcement that fades out.
@@ -181,6 +193,8 @@ pub enum Sfx {
     ExtraLife,
     EnemyShot,
     PlanetLost,
+    ShieldUp,
+    ShieldHit,
 }
 
 #[derive(Clone, Copy)]
@@ -293,5 +307,17 @@ mod tests {
         }
         g.reset();
         assert_eq!(g.multiplier(), 1);
+    }
+
+    #[test]
+    fn shields_stop_at_the_maximum_and_reset_with_a_new_game() {
+        let mut g = Game::default();
+        for _ in 0..SHIELD_MAX {
+            assert!(g.add_shield());
+        }
+        assert!(!g.add_shield());
+        assert_eq!(g.shields, SHIELD_MAX);
+        g.reset();
+        assert_eq!(g.shields, 0);
     }
 }

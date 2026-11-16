@@ -198,6 +198,14 @@ fn synth(sfx: Sfx) -> Vec<f32> {
                 a.sine(lerp(900.0, 1300.0, u)) * 0.5 * (1.0 - u)
             })
         }
+        Sfx::ShieldUp => arpeggio(&[587.0, 880.0, 1175.0, 1760.0], 0.05, 0.35),
+        Sfx::ShieldHit => {
+            let (mut a, mut b) = (Osc::default(), Osc::default());
+            render(0.45, |_, u| {
+                let env = (1.0 - u).powf(2.0);
+                (a.sine(lerp(320.0, 180.0, u)) * 0.6 + b.tri(lerp(1240.0, 700.0, u)) * 0.3) * env
+            })
+        }
         Sfx::ExtraLife => arpeggio(&[784.0, 988.0, 1175.0, 1568.0, 1976.0, 2349.0], 0.07, 0.15),
         Sfx::EnemyShot => {
             let mut a = Osc::default();
@@ -264,7 +272,7 @@ pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
 
 // --- Playback ----------------------------------------------------------------------------------
 
-const ALL: [Sfx; 18] = [
+const ALL: [Sfx; 20] = [
     Sfx::Laser,
     Sfx::Missile,
     Sfx::Hit,
@@ -283,6 +291,8 @@ const ALL: [Sfx; 18] = [
     Sfx::ExtraLife,
     Sfx::EnemyShot,
     Sfx::PlanetLost,
+    Sfx::ShieldUp,
+    Sfx::ShieldHit,
 ];
 
 fn volume(sfx: Sfx) -> f32 {

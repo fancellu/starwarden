@@ -1,6 +1,6 @@
 # Ideas for extra features
 
-- 1 Shields (drop from some defeated enemies, need to be picked up before they fall, can carry up to 9)
+- [x] 1 Shields (drop from some defeated enemies, need to be picked up before they fall, can carry up to 9)
 - 2 Sprint (right shoulder button, shift key)
   - Note: Shift and the right shoulder button already fire missiles, so sprint needs different
     buttons or missiles need to move.
