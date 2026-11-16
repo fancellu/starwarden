@@ -21,7 +21,7 @@
 
 - [x] 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
   set-down bonus.
-- 11 Colony buildings: a few domes on the surface; setting colonists down beside one earns more
+- [x] 11 Colony buildings: a few domes on the surface; setting colonists down beside one earns more
   and, when full, the dome fires a ground turret at nearby Harvesters.
 - 12 Colonist flares: a colonist being grabbed sends up a flare, shown on the scanner, so you
   know where to rush.

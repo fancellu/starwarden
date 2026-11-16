@@ -8,13 +8,16 @@
 //! `STARWARDEN_DEMO_POWER=1` drops each powerup in turn near the ship, one every 6 seconds from
 //! 3 s, for the pilot to catch (use about 42 seconds). With `STARWARDEN_DEMO_GALLERY=1` as well,
 //! it instead lines up a shield and every powerup, each named, above an idle ship.
+//! `STARWARDEN_DEMO_DOME=1` fills the dome under the ship and sends Harvesters at its turret; with
+//! `STARWARDEN_DEMO_CARRY=1` as well, the colonists caught are set down at that dome first.
 //! It does nothing unless the variable is set.
 
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
 use crate::colonists::{CState, Colonist};
-use crate::consts::TOP_Y;
+use crate::consts::{DOME_CAPACITY, TOP_Y};
+use crate::domes::Dome;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
 use crate::input::PlayerInput;
 use crate::meshes::Art;
@@ -22,7 +25,7 @@ use crate::pickups::{spawn_power_of, spawn_shield, Pickup, PickupKind};
 use crate::player::PlayerState;
 use crate::state::{Fx, FxKind, Power};
 use crate::world::Rng;
-use crate::world::{delta, Pos};
+use crate::world::{delta, wrap_delta, Pos};
 
 #[derive(Resource)]
 pub struct Demo {
@@ -31,6 +34,7 @@ pub struct Demo {
     gallery: bool,
     carry: bool,
     power: bool,
+    dome: bool,
     next_shot: usize,
     wiped: bool,
     /// Run length in seconds (`STARWARDEN_DEMO_SECS`, default 20).
@@ -50,6 +54,7 @@ pub fn plugin(app: &mut App) {
         gallery: std::env::var("STARWARDEN_DEMO_GALLERY").is_ok(),
         carry: std::env::var("STARWARDEN_DEMO_CARRY").is_ok(),
         power: std::env::var("STARWARDEN_DEMO_POWER").is_ok(),
+        dome: std::env::var("STARWARDEN_DEMO_DOME").is_ok(),
         next_shot: 0,
         wiped: false,
         secs: std::env::var("STARWARDEN_DEMO_SECS")
@@ -78,6 +83,7 @@ fn demo(
     mut colonists: Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
     enemies: Query<(Entity, &Pos), With<Enemy>>,
     pickups: Query<&Pos, (With<Pickup>, Without<Colonist>)>,
+    mut domes: Query<(Entity, &Pos, &mut Dome), (Without<Colonist>, Without<Enemy>)>,
     ps: Res<PlayerState>,
     art: Res<Art>,
     mut rng: ResMut<Rng>,
@@ -116,6 +122,39 @@ fn demo(
                 ));
             }
         }
+    } else if demo.dome && !demo.carry {
+        // Fill the dome under the ship and send Harvesters at it, to show the turret.
+        if crossed(3.0) {
+            let nearest = domes.iter_mut().min_by(|a, b| {
+                let d = |p: &Pos| wrap_delta(p.0.x - ps.pos.x).abs();
+                d(a.1).total_cmp(&d(b.1))
+            });
+            if let Some((de, dpos, mut dome)) = nearest {
+                for (_, mut c, _) in colonists
+                    .iter_mut()
+                    .filter(|(_, c, _)| c.state == CState::Walking)
+                    .take(DOME_CAPACITY as usize)
+                {
+                    c.state = CState::Sheltered(de);
+                    c.claimed_by = None;
+                }
+                dome.housed = DOME_CAPACITY;
+                for off in [Vec2::new(-330.0, 120.0), Vec2::new(300.0, 60.0)] {
+                    let at = Vec2::new(dpos.0.x, 0.0) + off;
+                    spawn_enemy(
+                        &mut commands,
+                        &art,
+                        &mut rng,
+                        Kind::Harvester,
+                        false,
+                        at,
+                        true,
+                    );
+                }
+            }
+        }
+        // Hover out of the way, above and to one side.
+        input.mv.y = ((120.0 - ps.pos.y) / 30.0).clamp(-1.0, 1.0);
     } else if demo.gallery {
         if crossed(3.1) {
             let kinds = [
@@ -151,7 +190,23 @@ fn demo(
                 &mut colonists,
                 &enemies,
                 &ps,
+                demo.dome,
             );
+            // With the dome switch too, Harvesters then arrive to meet the turret.
+            if demo.dome && crossed(CARRY_DROPS[CARRY_DROPS.len() - 1] + 6.0) {
+                for off in [Vec2::new(-330.0, 120.0), Vec2::new(300.0, 60.0)] {
+                    let at = Vec2::new(crate::domes::dome_x(1), 0.0) + off;
+                    spawn_enemy(
+                        &mut commands,
+                        &art,
+                        &mut rng,
+                        Kind::Harvester,
+                        false,
+                        at,
+                        true,
+                    );
+                }
+            }
         }
     } else if t > 1.5 {
         if demo.power && ps.alive {
@@ -233,9 +288,13 @@ fn carry_demo(
     colonists: &mut Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
     enemies: &Query<(Entity, &Pos), With<Enemy>>,
     ps: &PlayerState,
+    to_dome: bool,
 ) {
-    for (e, _) in enemies {
-        commands.entity(e).try_despawn();
+    let last_drop = CARRY_DROPS[CARRY_DROPS.len() - 1];
+    if !to_dome || t < last_drop + 5.0 {
+        for (e, _) in enemies {
+            commands.entity(e).try_despawn();
+        }
     }
     if !ps.alive {
         return;
@@ -258,12 +317,18 @@ fn carry_demo(
         .filter(|(_, c, _)| c.state == CState::Falling)
         .map(|(_, _, p)| delta(ps.pos, p.0))
         .min_by(|a, b| a.length().total_cmp(&b.length()));
-    let last_drop = CARRY_DROPS[CARRY_DROPS.len() - 1];
     if let Some(d) = falling {
         // Go and catch it.
         input.mv = Vec2::new((d.x / 60.0).clamp(-1.0, 1.0), (d.y / 30.0).clamp(-1.0, 1.0));
     } else if t < last_drop + 2.0 {
         // Wait at cruising height for the next one.
+        input.mv.y = ((CARRY_CRUISE_Y - ps.pos.y) / 30.0).clamp(-1.0, 1.0);
+    } else if to_dome && t < last_drop + 5.0 {
+        // Straight down beside the dome under the start point, so two go inside.
+        let dx = wrap_delta(crate::domes::dome_x(1) + 40.0 - ps.pos.x);
+        input.mv = Vec2::new((dx / 60.0).clamp(-1.0, 1.0), -1.0);
+    } else if to_dome {
+        // Then back up out of the turret's way.
         input.mv.y = ((CARRY_CRUISE_Y - ps.pos.y) / 30.0).clamp(-1.0, 1.0);
     } else if t < last_drop + 6.0 {
         // Cruise at full throttle to show the ship is slower when loaded.

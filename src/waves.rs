@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use crate::colonists::{spawn_colonists, Colonist};
 use crate::consts::*;
+use crate::domes::spawn_domes;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
 use crate::meshes::Art;
 use crate::player::{spawn_player, PlayerState};
@@ -172,6 +173,7 @@ pub fn run_waves(
                     if game.void_waves_left == 0 {
                         game.phase = Phase::Planet;
                         spawn_colonists(&mut commands, &art, &mut rng);
+                        spawn_domes(&mut commands, &art);
                         flash.0 = 0.7;
                         restored = true;
                     }
@@ -225,6 +227,7 @@ pub fn new_game(
     cam.shake = 0.0;
     spawn_player(&mut commands, &art, ps.pos, 1.0, 2.0);
     spawn_colonists(&mut commands, &art, &mut rng);
+    spawn_domes(&mut commands, &art);
     banner.show("WAVE 1", "PROTECT THE COLONISTS");
     sfx.write(Sfx::WaveStart);
 }

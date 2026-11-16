@@ -5,6 +5,7 @@ use bevy::window::PrimaryWindow;
 
 use crate::colonists::{CState, Colonist};
 use crate::consts::*;
+use crate::domes::Dome;
 use crate::enemies::{Enemy, Kind};
 use crate::input::{page_zoom, stick_range, touch_layout, TouchState};
 use crate::pickups::Pickup;
@@ -315,6 +316,7 @@ pub fn draw_overlays(
     enemies: Query<(&Pos, &Enemy)>,
     colonists: Query<(&Pos, &Colonist)>,
     pickups: Query<(&Pos, &Pickup)>,
+    domes: Query<(&Pos, &Dome)>,
 ) {
     if *state.get() == GameState::Title {
         return;
@@ -394,7 +396,21 @@ pub fn draw_overlays(
     let dash = |g: &mut Gizmos, p: Vec2, half: f32, c: LinearRgba| {
         g.line_2d(p - Vec2::new(half, 0.0), p + Vec2::new(half, 0.0), col(c));
     };
+    // Domes: a small arch, brighter and with a mast when the turret is on.
+    for (pos, d) in &domes {
+        let p = map(pos.0);
+        let c = if d.full() { C_AMBER } else { C_CYAN_DIM };
+        dash(&mut gizmos, p + Vec2::new(0.0, 3.0), 2.5, c);
+        gizmos.line_2d(p + Vec2::new(-2.5, 0.0), p + Vec2::new(-2.5, 3.0), col(c));
+        gizmos.line_2d(p + Vec2::new(2.5, 0.0), p + Vec2::new(2.5, 3.0), col(c));
+        if d.full() {
+            gizmos.line_2d(p + Vec2::new(0.0, 3.0), p + Vec2::new(0.0, 7.0), col(c));
+        }
+    }
     for (pos, c) in &colonists {
+        if matches!(c.state, CState::Sheltered(_)) {
+            continue;
+        }
         // Colonists in danger blink.
         let danger = !matches!(c.state, CState::Walking | CState::Carried);
         if danger && ((t * 8.0) as u32).is_multiple_of(2) {

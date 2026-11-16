@@ -293,6 +293,7 @@ pub enum Sfx {
     Sprint,
     PowerUp,
     PowerDown,
+    Turret,
 }
 
 #[derive(Clone, Copy)]

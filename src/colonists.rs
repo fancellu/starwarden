@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use crate::consts::*;
+use crate::domes::Dome;
 use crate::enemies::Enemy;
 use crate::meshes::Art;
 use crate::player::PlayerState;
@@ -18,6 +19,8 @@ pub enum CState {
     Falling,
     /// Caught by the player and waiting to be set down.
     Carried,
+    /// Inside this dome, out of the Harvesters' reach, until the next wave.
+    Sheltered(Entity),
 }
 
 #[derive(Component)]
@@ -60,8 +63,18 @@ pub fn update_colonists(
     mut ps: ResMut<PlayerState>,
     mut game: ResMut<Game>,
     mut rng: ResMut<Rng>,
-    mut q: Query<(Entity, &mut Colonist, &mut Pos, &mut Transform), Without<Enemy>>,
+    mut q: Query<
+        (
+            Entity,
+            &mut Colonist,
+            &mut Pos,
+            &mut Transform,
+            &mut Visibility,
+        ),
+        Without<Enemy>,
+    >,
     enemies: Query<&Pos, With<Enemy>>,
+    mut domes: Query<(Entity, &Pos, &mut Dome), (Without<Colonist>, Without<Enemy>)>,
     mut fx: MessageWriter<Fx>,
     mut sfx: MessageWriter<Sfx>,
 ) {
@@ -70,17 +83,26 @@ pub fn update_colonists(
     // the more are set down at once.
     let aboard = q
         .iter()
-        .filter(|(_, c, _, _)| c.state == CState::Carried)
+        .filter(|(_, c, ..)| c.state == CState::Carried)
         .count() as u32;
     let ship_ground = terrain::height(ps.pos.x) + 9.0;
     let set_down = ps.alive && aboard > 0 && ps.pos.y - 19.0 <= ship_ground + 14.0;
     let set_down_each = SET_DOWN_POINTS * aboard.min(CARRY_BONUS_MAX);
     let mut landed = 0;
     let mut carried = 0;
+    // A dome beside the ship with room takes those set down first.
+    let mut shelter = domes
+        .iter()
+        .filter(|(_, dpos, d)| {
+            d.housed < DOME_CAPACITY && wrap_delta(dpos.0.x - ps.pos.x).abs() < DOME_REACH
+        })
+        .map(|(de, dpos, d)| (de, dpos.0, DOME_CAPACITY - d.housed))
+        .next();
+    let mut sheltered = 0;
     let magnet = ps.alive && game.power_on(Power::Magnet);
     let ship = ps.pos;
     let in_reach = |p: Vec2| magnet && delta(p, ship).length() < MAGNET_REACH;
-    for (e, mut c, mut pos, mut tf) in &mut q {
+    for (e, mut c, mut pos, mut tf, mut vis) in &mut q {
         c.t += dt;
         if c.claimed_by.is_some_and(|h| enemies.get(h).is_err()) {
             c.claimed_by = None;
@@ -164,6 +186,14 @@ pub fn update_colonists(
                     c.state = CState::Falling;
                     c.fall_from = pos.0.y;
                     c.vy = 0.0;
+                } else if let (true, Some((de, dpos, room))) = (set_down, shelter.as_mut()) {
+                    c.state = CState::Sheltered(*de);
+                    pos.0 = *dpos + Vec2::new(0.0, 9.0);
+                    sheltered += 1;
+                    *room -= 1;
+                    if *room == 0 {
+                        shelter = None;
+                    }
                 } else if set_down {
                     pos.0 = Vec2::new(wrap(ps.pos.x + landed as f32 * 8.0), 0.0);
                     pos.0.y = terrain::height(pos.0.x) + 9.0;
@@ -175,14 +205,46 @@ pub fn update_colonists(
                     carried += 1;
                 }
             }
+            CState::Sheltered(d) => {
+                // Should the dome ever be gone, they are back outside.
+                if domes.get(d).is_err() {
+                    c.state = CState::Walking;
+                }
+            }
         }
         if c.state != CState::Walking {
             tf.scale.x = 1.0;
         }
         tf.rotation = Quat::from_rotation_z(tilt);
+        vis.set_if_neq(if matches!(c.state, CState::Sheltered(_)) {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        });
     }
-    if landed > 0 {
-        let pts = set_down_each * landed;
+    if sheltered > 0 {
+        let near = domes.iter_mut().find(|(_, dpos, d)| {
+            d.housed < DOME_CAPACITY && wrap_delta(dpos.0.x - ps.pos.x).abs() < DOME_REACH
+        });
+        if let Some((_, dpos, mut d)) = near {
+            d.housed += sheltered;
+            let (text, color) = if d.housed >= DOME_CAPACITY {
+                ("TURRET ONLINE", C_AMBER)
+            } else {
+                ("SHELTERED", C_CYAN)
+            };
+            let at = dpos.0 + Vec2::new(0.0, 75.0);
+            fx.write(Fx::new(at, color, FxKind::Label(text)));
+            fx.write(Fx::new(
+                dpos.0 + Vec2::new(0.0, 15.0),
+                color,
+                FxKind::Rescue,
+            ));
+            sfx.write(Sfx::ShieldUp);
+        }
+    }
+    if landed + sheltered > 0 {
+        let pts = set_down_each * (landed + sheltered * DOME_BONUS);
         if game.add_score(pts) {
             sfx.write(Sfx::ExtraLife);
         }
@@ -230,6 +292,7 @@ mod tests {
             },
             Pos(Vec2::new(X, y)),
             Transform::default(),
+            Visibility::default(),
         ))
         .id()
     }
@@ -348,6 +411,58 @@ mod tests {
         assert_eq!(state(&w, b), Some(CState::Walking));
         assert_eq!(w.resource::<Game>().score, 2 * 2 * SET_DOWN_POINTS);
         assert_eq!(w.resource::<PlayerState>().carried, 0);
+    }
+
+    fn dome(w: &mut World, x: f32, housed: u32) -> Entity {
+        w.spawn((
+            Dome {
+                housed,
+                fire_cd: 0.0,
+            },
+            Pos(Vec2::new(x, terrain::height(x))),
+        ))
+        .id()
+    }
+
+    #[test]
+    fn colonists_set_down_at_a_dome_shelter_inside_for_double_points() {
+        let ground = terrain::height(X);
+        let mut w = world(Vec2::new(X, ground + 20.0));
+        let d = dome(&mut w, X + 40.0, 0);
+        let far = dome(&mut w, X + 3000.0, 0);
+        let all: Vec<Entity> = (0..3)
+            .map(|_| colonist(&mut w, CState::Carried, 80.0, 0.0))
+            .collect();
+        step(&mut w);
+        let inside = all
+            .iter()
+            .filter(|&&e| state(&w, e) == Some(CState::Sheltered(d)))
+            .count() as u32;
+        let outside = all
+            .iter()
+            .filter(|&&e| state(&w, e) == Some(CState::Walking))
+            .count() as u32;
+        assert_eq!((inside, outside), (DOME_CAPACITY, 3 - DOME_CAPACITY));
+        assert_eq!(w.get::<Dome>(d).unwrap().housed, DOME_CAPACITY);
+        assert_eq!(w.get::<Dome>(far).unwrap().housed, 0);
+        // Three set down together are worth 3x each; those inside count double.
+        assert_eq!(
+            w.resource::<Game>().score,
+            3 * SET_DOWN_POINTS * (outside + inside * DOME_BONUS)
+        );
+        for &e in &all {
+            let hidden = *w.get::<Visibility>(e).unwrap() == Visibility::Hidden;
+            assert_eq!(hidden, matches!(state(&w, e), Some(CState::Sheltered(_))));
+        }
+
+        // The dome is full: the next one stays outside.
+        w.resource_mut::<PlayerState>().pos.y = ground + 200.0;
+        let late = colonist(&mut w, CState::Carried, 80.0, 0.0);
+        step(&mut w);
+        w.resource_mut::<PlayerState>().pos.y = ground + 20.0;
+        step(&mut w);
+        assert_eq!(state(&w, late), Some(CState::Walking));
+        assert_eq!(w.get::<Dome>(d).unwrap().housed, DOME_CAPACITY);
     }
 
     #[test]

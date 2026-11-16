@@ -13,6 +13,7 @@ mod colonists;
 mod consts;
 #[cfg(not(target_arch = "wasm32"))]
 mod dev;
+mod domes;
 mod enemies;
 mod fx;
 mod hud;
@@ -133,7 +134,12 @@ fn main() {
             )
                 .chain()
                 .run_if(playing),
-            (enemies::enemy_ai, colonists::update_colonists)
+            (
+                enemies::enemy_ai,
+                colonists::update_colonists,
+                domes::empty_domes,
+                domes::dome_turrets,
+            )
                 .chain()
                 .run_if(simulating),
         )
@@ -151,6 +157,7 @@ fn main() {
                 weapons::update_bolts,
                 weapons::update_missiles,
                 enemies::update_shots,
+                domes::update_turret_shots,
             )
                 .chain()
                 .run_if(simulating),
@@ -164,6 +171,7 @@ fn main() {
         Update,
         (
             enemies::apply_damage.run_if(simulating),
+            domes::sync_domes_with_planet.run_if(simulating),
             (
                 player::player_death,
                 player::player_respawn,

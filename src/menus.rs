@@ -60,6 +60,7 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>, saved: Res<SavedBest
                      AN ESCAPED {NAME_HARVESTER} BECOMES A {NAME_WRAITH}\n\
                      {NAME_HIVE}S BURST INTO {NAME_STINGER}S - {NAME_STALKER}S HUNT THE SLOW\n\
                      CATCH FALLING SHIELDS AND POWERUPS\n\
+                     SET COLONISTS DOWN AT A DOME TO SHELTER THEM AND ARM ITS TURRET\n\
                      LOSE EVERY COLONIST AND THE PLANET IS GONE"
                 ),
                 15.0,

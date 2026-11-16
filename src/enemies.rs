@@ -93,6 +93,27 @@ pub struct Enemy {
     pub hit: f32,
 }
 
+#[cfg(test)]
+impl Enemy {
+    /// A plain enemy for tests that do not need the art.
+    pub fn test(kind: Kind) -> Self {
+        Self {
+            kind,
+            elite: false,
+            hp: 1,
+            radius: kind.radius(),
+            warp: 0.0,
+            t: 0.0,
+            fire_cd: 9.0,
+            ai: Ai::Roam,
+            target: None,
+            aim: Vec2::ZERO,
+            timer: 0.0,
+            hit: 0.0,
+        }
+    }
+}
+
 #[derive(Component)]
 pub struct EShot {
     pub life: f32,
@@ -563,6 +584,7 @@ mod tests {
             shield: Handle::default(),
             power: Default::default(),
             magnet_ring: Handle::default(),
+            dome: Default::default(),
         }
     }
 

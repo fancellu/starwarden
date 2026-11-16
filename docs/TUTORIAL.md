@@ -150,6 +150,12 @@ steer anything within `MAGNET_REACH` straight at the ship, and `update_colonists
 colonist held by a Harvester back into a falling one. The Harvester's AI already copes with
 losing its colonist. `show_magnet_ring` draws the reach as a dashed circle that follows the ship.
 
+[`src/domes.rs`](../src/domes.rs) adds the colony domes. A colonist set down beside a dome
+becomes `CState::Sheltered(dome)`: hidden, still alive, and ignored by Harvesters, which only
+ever pick walking colonists. `dome_turrets` fires a `TurretShot` from any full dome, aimed by
+`turret_target` at where the nearest Harvester will be when the shot arrives.
+`empty_domes` watches the wave number and sends everyone back outside when it changes.
+
 ## Enemies
 
 [`src/enemies.rs`](../src/enemies.rs) is the largest file. All five enemy types share one

@@ -25,6 +25,10 @@ where you started. The scanner at the top of the screen shows the whole world.
   set them down. A short fall is survivable; a long one is not.
 - You can carry several colonists at once. Each one slows the ship a little, but they are set
   down together and each is worth 500 times the number set down (up to x5).
+- Three **domes** stand on the surface. Set colonists down beside one and up to two go inside,
+  where Harvesters cannot reach them, and each scores double. A dome with two inside switches
+  on its turret, which shoots at nearby Harvesters. Everyone walks back out when the next wave
+  begins.
 - A Harvester that reaches the top with a colonist becomes a **Wraith** (magenta): fast,
   erratic and aggressive.
 - **Hives** (amber hexagons) take several hits and burst into a swarm of **Stingers**.
@@ -63,6 +67,14 @@ inside it loses them to the magnet. Colonists walking on the ground are left alo
 | | |
 | --- | --- |
 | ![An invincible ship ramming a Harvester](docs/invincible.png) | ![The wide beam hitting a Hive during a time warp](docs/widebeam.png) |
+
+A dome shows how many are inside by its lit windows, and its turret barrel lights up when it is
+armed. The turret holds its fire on a Harvester that is carrying a colonist too high to survive
+the fall. Domes are marked on the scanner, and are lost and rebuilt with the planet.
+
+| | |
+| --- | --- |
+| ![Colonists set down at a dome, arming its turret](docs/dome.png) | ![A dome's turret firing at Harvesters](docs/turret.png) |
 
 Kill quickly for a **combo**: every 5 kills in a row, each within 4 seconds of the last, raise
 the score multiplier for enemies by one, up to x5. Losing your ship or pausing too long between
@@ -217,6 +229,7 @@ For a guided tour of how the code works, see [docs/TUTORIAL.md](docs/TUTORIAL.md
 | `src/weapons.rs`    | Laser, homing missiles, smart bomb                              |
 | `src/enemies.rs`    | Enemy behaviour, enemy shots, damage and scoring                |
 | `src/colonists.rs`  | Walking, abduction, falling and rescue                          |
+| `src/domes.rs`      | Colony domes: sheltering colonists and the turret               |
 | `src/pickups.rs`    | Shields and powerups dropped by enemies: falling and catching   |
 | `src/waves.rs`      | Wave contents and progression, the void phase, new games        |
 | `src/terrain.rs`    | Planet surface height function and mesh                         |
@@ -248,7 +261,10 @@ phase, `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type, and `STARWARDEN_DE
 catches three falling colonists, carries them and sets them down together (use about 22 seconds).
 `STARWARDEN_DEMO_POWER=1` drops each powerup in turn above the ship, one every 6 seconds (use
 about 42 seconds); together with `STARWARDEN_DEMO_GALLERY=1` it lines up a shield and every
-powerup, each named, 7 seconds in. The output folder must already exist.
+powerup, each named, 7 seconds in. `STARWARDEN_DEMO_DOME=1` fills the dome under the ship and
+sends two Harvesters at its turret (use about 10 seconds); together with
+`STARWARDEN_DEMO_CARRY=1` the three colonists caught are set down at that dome first (use about
+20 seconds). The output folder must already exist.
 
 The images in `docs/` were made this way. The animation is the frames of a run at 0.08 s
 intervals joined with ffmpeg:

@@ -120,6 +120,21 @@ pub const COLONISTS: usize = 10;
 pub const SAFE_FALL: f32 = 130.0;
 pub const FALL_SPEED: f32 = 230.0;
 
+// --- Domes ------------------------------------------------------------------------------------
+/// Colony domes spaced evenly around the planet.
+pub const DOMES: usize = 3;
+/// Colonists a dome can shelter; a full dome fires its turret.
+pub const DOME_CAPACITY: u32 = 2;
+/// How close (horizontally) the ship must set colonists down for them to go inside.
+pub const DOME_REACH: f32 = 190.0;
+/// Set-down points are multiplied by this for each colonist sheltered.
+pub const DOME_BONUS: u32 = 2;
+/// How far a dome's turret can see a Harvester.
+pub const DOME_RANGE: f32 = 420.0;
+/// Seconds between turret shots.
+pub const DOME_FIRE_EVERY: f32 = 0.9;
+pub const TURRET_SHOT_SPEED: f32 = 900.0;
+
 // --- Waves ------------------------------------------------------------------------------------
 pub const VOID_WAVES: u32 = 3;
 pub const STALKER_AFTER: f32 = 28.0;

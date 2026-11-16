@@ -233,6 +233,14 @@ fn synth(sfx: Sfx) -> Vec<f32> {
             let mut a = Osc::default();
             render(0.22, |_, u| a.tri(lerp(880.0, 330.0, u)) * 0.5 * (1.0 - u))
         }
+        Sfx::Turret => {
+            // A short, low thud: clearly not the ship's laser.
+            let (mut a, mut b) = (Osc::default(), Osc::default());
+            render(0.2, |_, u| {
+                let f = lerp(520.0, 140.0, u.powf(0.5));
+                (a.tri(f) * 0.6 + b.square(f * 0.5) * 0.25) * (1.0 - u).powf(1.6)
+            })
+        }
         Sfx::EnemyShot => {
             let mut a = Osc::default();
             render(0.16, |_, u| a.tri(lerp(420.0, 980.0, u)) * 0.45 * (1.0 - u))
@@ -298,7 +306,7 @@ pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
 
 // --- Playback ----------------------------------------------------------------------------------
 
-const ALL: [Sfx; 23] = [
+const ALL: [Sfx; 24] = [
     Sfx::Laser,
     Sfx::Missile,
     Sfx::Hit,
@@ -322,6 +330,7 @@ const ALL: [Sfx; 23] = [
     Sfx::Sprint,
     Sfx::PowerUp,
     Sfx::PowerDown,
+    Sfx::Turret,
 ];
 
 fn volume(sfx: Sfx) -> f32 {
@@ -329,6 +338,7 @@ fn volume(sfx: Sfx) -> f32 {
         Sfx::Laser => 0.22,
         Sfx::Hit => 0.3,
         Sfx::EnemyShot => 0.25,
+        Sfx::Turret => 0.3,
         Sfx::Missile => 0.45,
         Sfx::ExplodeSmall => 0.5,
         Sfx::Alarm | Sfx::StalkerWarn => 0.4,

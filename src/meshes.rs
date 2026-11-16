@@ -193,6 +193,8 @@ pub struct Art {
     pub power: [Handle<Mesh>; Power::COUNT],
     /// Dashed circle around the ship showing the magnet's reach.
     pub magnet_ring: Handle<Mesh>,
+    /// A colony dome, indexed by how many colonists are sheltering inside (0 to 2).
+    pub dome: [Handle<Mesh>; 3],
 }
 
 fn dim(c: LinearRgba, f: f32) -> LinearRgba {
@@ -536,6 +538,70 @@ fn power(p: Power) -> Mesh {
     s.build()
 }
 
+/// A colony dome with `housed` colonists inside. Its origin is at ground level. Each window
+/// lights up for one colonist, and the turret barrel on top glows when the dome is full, so
+/// its state can be read by shape and count rather than colour.
+fn dome(housed: u32) -> Mesh {
+    const R: f32 = 26.0;
+    const N: usize = 14;
+    let mut s = Shape::default();
+    // Footing, sunk into the ground so that slopes do not leave a gap.
+    let (top, low) = (dim(C_CYAN_DIM, 0.5), dim(C_CYAN_DIM, 0.1));
+    s.quad(
+        [(-34.0, 3.0), (34.0, 3.0), (30.0, -16.0), (-30.0, -16.0)],
+        [top, top, low, low],
+    );
+    // Glass.
+    let arc: Vec<P> = (0..=N)
+        .map(|i| {
+            let a = i as f32 / N as f32 * PI;
+            (a.cos() * R, 3.0 + a.sin() * R)
+        })
+        .collect();
+    s.fan(
+        (0.0, 3.0),
+        &arc,
+        dim(C_CYAN_DIM, 0.35),
+        dim(C_CYAN_DIM, 0.12),
+    );
+    for w in arc.windows(2) {
+        let out = |p: P| (p.0 * 1.07, 3.0 + (p.1 - 3.0) * 1.07);
+        s.quad([w[0], out(w[0]), out(w[1]), w[1]], [C_CYAN; 4]);
+    }
+    // Two windows, one lit for each colonist inside.
+    for (i, x) in [-11.0, 11.0].into_iter().enumerate() {
+        let c = if (i as u32) < housed {
+            C_WHITE
+        } else {
+            dim(C_CYAN_DIM, 0.3)
+        };
+        s.quad(
+            [
+                (x - 4.0, 7.0),
+                (x + 4.0, 7.0),
+                (x + 4.0, 16.0),
+                (x - 4.0, 16.0),
+            ],
+            [c; 4],
+        );
+    }
+    // Turret: a housing and a barrel, lit when the dome is full.
+    let t = if housed >= DOME_CAPACITY {
+        C_AMBER
+    } else {
+        dim(C_CYAN_DIM, 0.6)
+    };
+    s.quad(
+        [(-6.0, 29.0), (6.0, 29.0), (4.0, 34.0), (-4.0, 34.0)],
+        [t; 4],
+    );
+    s.quad(
+        [(-1.8, 34.0), (1.8, 34.0), (1.8, 43.0), (-1.8, 43.0)],
+        [t; 4],
+    );
+    s.build()
+}
+
 /// Dashed circle of radius `MAGNET_REACH`, drawn around the ship while the magnet is on.
 fn magnet_ring() -> Mesh {
     const DASHES: usize = 40;
@@ -621,5 +687,6 @@ pub fn setup_art(
         shield: meshes.add(shield()),
         power: Power::ALL.map(|p| meshes.add(power(p))),
         magnet_ring: meshes.add(magnet_ring()),
+        dome: [0, 1, 2].map(|n| meshes.add(dome(n))),
     });
 }
