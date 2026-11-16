@@ -36,6 +36,8 @@ pub const START_BOMBS: u32 = 3;
 pub const START_MISSILES: u32 = 4;
 pub const MAX_MISSILES: u32 = 8;
 pub const BONUS_EVERY: u32 = 10_000;
+/// Extra ships come every other bonus; bombs come with every one.
+pub const SHIP_BONUS_EVERY: u32 = 20_000;
 /// Seconds after a kill in which the next kill keeps the combo going.
 pub const COMBO_WINDOW: f32 = 4.0;
 /// Kills in a row needed for each step up of the score multiplier.

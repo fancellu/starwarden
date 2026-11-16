@@ -33,7 +33,8 @@ where you started. The scanner at the top of the screen shows the whole world.
   enemies in the void; survive them and the planet is rebuilt with new colonists.
 
 Weapons: a rapid-fire laser, a limited stock of homing missiles (two more each wave) and smart
-bombs that destroy everything on screen. Every 10,000 points earns an extra ship and bomb.
+bombs that destroy everything on screen. Every 10,000 points earns an extra bomb, and every
+20,000 an extra ship.
 
 Destroyed enemies sometimes drop a **shield** (cyan hexagon; Hives most often). Catch it before
 it reaches the ground. Each shield held absorbs one hit that would otherwise cost a ship, and

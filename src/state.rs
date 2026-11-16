@@ -100,8 +100,10 @@ impl Game {
         self.score += pts;
         self.high = self.high.max(self.score);
         if self.score >= self.next_bonus {
+            if self.next_bonus.is_multiple_of(SHIP_BONUS_EVERY) {
+                self.lives += 1;
+            }
             self.next_bonus += BONUS_EVERY;
-            self.lives += 1;
             self.bombs += 1;
             true
         } else {
@@ -245,11 +247,12 @@ mod tests {
         let mut g = Game::default();
         assert!(!g.add_score(BONUS_EVERY - 1));
         assert!(g.add_score(1));
-        assert_eq!(g.lives, START_LIVES + 1);
+        assert_eq!(g.lives, START_LIVES, "no ship at the first bonus");
         assert_eq!(g.bombs, START_BOMBS + 1);
         assert!(!g.add_score(10));
         assert!(g.add_score(BONUS_EVERY));
-        assert_eq!(g.lives, START_LIVES + 2);
+        assert_eq!(g.lives, START_LIVES + 1, "a ship every second bonus");
+        assert_eq!(g.bombs, START_BOMBS + 2);
     }
 
     #[test]

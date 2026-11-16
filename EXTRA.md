@@ -4,7 +4,7 @@
 - 2 Sprint (right shoulder button, shift key)
   - Note: Shift and the right shoulder button already fire missiles, so sprint needs different
     buttons or missiles need to move.
-- 3 Powerups (Speed, invincibility, fatter beam, super sprint)
+- 3 Powerups (Speed, invincibility, fatter beam, super sprint, time warp)
 
 ## Player and weapons
 
