@@ -63,6 +63,12 @@ Kill quickly for a **combo**: every 5 kills in a row, each within 4 seconds of t
 the score multiplier for enemies by one, up to x5. Losing your ship or pausing too long between
 kills ends it.
 
+Your **best score** and the date you set it are remembered and shown on the title screen. In
+the browser they are kept in the site's local storage (clearing the site's data resets them).
+The desktop version keeps them in `best.txt` in `%APPDATA%\Starwarden` on Windows,
+`~/Library/Application Support/Starwarden` on macOS and `~/.local/share/starwarden` on Linux;
+delete the file to reset. The self-playing demo never changes it.
+
 ## Controls
 
 | Action     | Keyboard                | Gamepad                | Touch                   |
@@ -215,6 +221,7 @@ For a guided tour of how the code works, see [docs/TUTORIAL.md](docs/TUTORIAL.md
 | `src/audio.rs`      | Sound synthesis and playback                                    |
 | `src/hud.rs`        | Score display, scanner, banners, touch buttons                  |
 | `src/menus.rs`      | Title, pause and game-over screens                              |
+| `src/save.rs`       | Best score and date, kept in localStorage or a file             |
 | `src/dev.rs`        | Desktop-only self-playing demo that saves screenshots           |
 
 ## Development
@@ -247,5 +254,4 @@ ffmpeg -framerate 12.5 -i shots/shot%03d.png -vf "fps=10,scale=600:-1:flags=lanc
 
 ## Known limits
 
-- The best score is kept only until the game is closed.
 - Sound effects only; there is no music.

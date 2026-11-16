@@ -286,6 +286,11 @@ Almost nothing in the Rust code is platform-specific. The differences are:
 - `dev.rs` (the self-playing demo) is compiled only on the desktop.
 - `page_zoom` in `input.rs` asks the browser how large the game is drawn.
 - `lite_graphics` in `main.rs` asks the page whether to drop the glow effects.
+- [`src/save.rs`](../src/save.rs) keeps the best score in `localStorage` on the web and in a
+  file in the app-data folder on the desktop. Each is a tiny `backend` module (`read`, `write`,
+  `now`) chosen with `#[cfg(target_arch = "wasm32")]`; everything else in the file, such as
+  the text format and turning a timestamp into a date, is shared and unit-tested. The save is
+  read in `main` before the app runs, so the title screen and `Game.high` start with it.
 
 The web side is [`index.html`](../index.html), which Trunk turns into the deployable site.
 It contains two pieces of JavaScript worth knowing about:

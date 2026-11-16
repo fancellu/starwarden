@@ -17,8 +17,9 @@ bevy = { version = "0.20", default-features = false, features = [
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bevy = { version = "0.20", default-features = false, features = ["bevy_audio", "wav", "png"] }
 
-# The web build plays sound through the browser, and asks the page how large the game is
-# drawn (to size the touch controls) and which graphics mode to use.
+# The web build plays sound through the browser, asks the page how large the game is drawn
+# (to size the touch controls) and which graphics mode to use, and keeps the best score in
+# localStorage.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = [
     "AudioBuffer",
@@ -31,8 +32,11 @@ web-sys = { version = "0.3", features = [
     "AudioScheduledSourceNode",
     "BaseAudioContext",
     "GainNode",
+    "Storage",
     "Window",
 ] }
+# The clock, for the date the best score was set (see src/save.rs).
+js-sys = "0.3"
 
 # Fast-ish debug builds: optimise dependencies fully, our code lightly.
 [profile.dev]

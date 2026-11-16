@@ -21,6 +21,7 @@ mod menus;
 mod meshes;
 mod pickups;
 mod player;
+mod save;
 mod state;
 mod terrain;
 mod waves;
@@ -52,8 +53,16 @@ fn main() {
         ..default()
     }))
     .insert_resource(ClearColor(Color::BLACK))
-    .init_state::<GameState>()
-    .init_resource::<Game>()
+    .init_state::<GameState>();
+
+    // The best score from earlier sessions, read before anything runs so the title screen
+    // can show it.
+    let saved = save::SavedBest::load();
+    app.insert_resource(Game {
+        high: saved.best.map_or(0, |b| b.score),
+        ..default()
+    })
+    .insert_resource(saved)
     .init_resource::<Banner>()
     .init_resource::<Flash>()
     .init_resource::<world::GameCam>()
@@ -189,6 +198,7 @@ fn main() {
     );
 
     audio::play_sfx_plugin(&mut app);
+    save::plugin(&mut app);
 
     #[cfg(not(target_arch = "wasm32"))]
     dev::plugin(&mut app);

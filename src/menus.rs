@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use crate::consts::*;
 use crate::hud::font;
 use crate::input::PlayerInput;
+use crate::save::{date_text, SavedBest};
 use crate::state::*;
 
 #[derive(Component)]
@@ -35,8 +36,14 @@ fn line(text: impl Into<String>, size: f32, color: LinearRgba) -> impl Bundle {
     )
 }
 
-pub fn setup_title(mut commands: Commands, game: Res<Game>) {
+pub fn setup_title(mut commands: Commands, game: Res<Game>, saved: Res<SavedBest>) {
     let dim = rgb(0.55, 0.65, 0.8);
+    // The remembered best with the date it was set; nothing at all before the first score.
+    let best = match saved.best {
+        Some(b) if b.score >= game.high => format!("BEST {:07} - {}", b.score, date_text(b.when)),
+        _ if game.high > 0 => format!("BEST {:07}", game.high),
+        _ => String::new(),
+    };
     commands.spawn((
         DespawnOnExit(GameState::Title),
         overlay(),
@@ -77,7 +84,7 @@ pub fn setup_title(mut commands: Commands, game: Res<Game>) {
                 Blink,
                 line("PRESS SPACE, (A) OR TAP TO START", 24.0, C_WHITE)
             ),
-            line(format!("BEST {:07}", game.high), 16.0, C_AMBER),
+            line(best, 16.0, C_AMBER),
             (
                 Node {
                     position_type: PositionType::Absolute,
