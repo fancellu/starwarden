@@ -179,6 +179,10 @@ check its captor every frame: if the Harvester in `Abducted(entity)` no longer e
 colonist starts `Falling`. Nothing has to notify it. The same approach covers a Harvester
 whose target was grabbed by another, and a carried colonist whose ship was destroyed.
 
+Carried colonists are counted at the start of `update_colonists`, so that they can all be set
+down in the same frame with a bonus that grows with their number. The count is written to
+`PlayerState::carried`, where the ship's controls read it to slow down and the HUD shows it.
+
 A fall is survivable if it started low enough (`fall_from` records where it began). The
 tests at the bottom of the file cover each of these cases.
 

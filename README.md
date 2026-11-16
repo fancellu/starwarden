@@ -23,6 +23,8 @@ where you started. The scanner at the top of the screen shows the whole world.
 - **Harvesters** (green) descend, grab a colonist and carry them upward.
 - Shoot the Harvester and the colonist falls. **Fly into them to catch them**, then fly low to
   set them down. A short fall is survivable; a long one is not.
+- You can carry several colonists at once. Each one slows the ship a little, but they are set
+  down together and each is worth 500 times the number set down (up to x5).
 - A Harvester that reaches the top with a colonist becomes a **Wraith** (magenta): fast,
   erratic and aggressive.
 - **Hives** (amber hexagons) take several hits and burst into a swarm of **Stingers**.
@@ -200,7 +202,8 @@ STARWARDEN_DEMO=./shots cargo run
 
 Optional extras: `STARWARDEN_DEMO_SECS=60` sets the run length, `STARWARDEN_DEMO_EVERY=0.08`
 sets the seconds between screenshots (default 2.5), `STARWARDEN_DEMO_VOID=1` forces the void
-phase, and `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type. The output folder must
+phase, `STARWARDEN_DEMO_GALLERY=1` lines up every enemy type, and `STARWARDEN_DEMO_CARRY=1`
+catches three falling colonists, carries them and sets them down together (use about 22 seconds). The output folder must
 already exist.
 
 The images in `docs/` were made this way. The animation is the frames of a run at 0.08 s

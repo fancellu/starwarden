@@ -57,7 +57,7 @@ pub fn spawn_colonists(commands: &mut Commands, art: &Art, rng: &mut Rng) {
 pub fn update_colonists(
     time: Res<Time>,
     mut commands: Commands,
-    ps: Res<PlayerState>,
+    mut ps: ResMut<PlayerState>,
     mut game: ResMut<Game>,
     mut rng: ResMut<Rng>,
     mut q: Query<(Entity, &mut Colonist, &mut Pos, &mut Transform), Without<Enemy>>,
@@ -66,6 +66,16 @@ pub fn update_colonists(
     mut sfx: MessageWriter<Sfx>,
 ) {
     let dt = time.delta_secs();
+    // Everyone carried is set down together when the ship flies low, and each is worth more
+    // the more are set down at once.
+    let aboard = q
+        .iter()
+        .filter(|(_, c, _, _)| c.state == CState::Carried)
+        .count() as u32;
+    let ship_ground = terrain::height(ps.pos.x) + 9.0;
+    let set_down = ps.alive && aboard > 0 && ps.pos.y - 19.0 <= ship_ground + 14.0;
+    let set_down_each = SET_DOWN_POINTS * aboard.min(CARRY_BONUS_MAX);
+    let mut landed = 0;
     let mut carried = 0;
     for (e, mut c, mut pos, mut tf) in &mut q {
         c.t += dt;
@@ -131,19 +141,15 @@ pub fn update_colonists(
                     c.state = CState::Falling;
                     c.fall_from = pos.0.y;
                     c.vy = 0.0;
+                } else if set_down {
+                    pos.0 = Vec2::new(wrap(ps.pos.x + landed as f32 * 8.0), 0.0);
+                    pos.0.y = terrain::height(pos.0.x) + 9.0;
+                    c.state = CState::Walking;
+                    landed += 1;
+                    fx.write(Fx::new(pos.0, C_GREEN, FxKind::Rescue));
                 } else {
                     pos.0 = Vec2::new(wrap(ps.pos.x + carried as f32 * 8.0), ps.pos.y - 19.0);
                     carried += 1;
-                    if pos.0.y <= ground + 14.0 {
-                        pos.0.y = ground;
-                        c.state = CState::Walking;
-                        if game.add_score(500) {
-                            sfx.write(Sfx::ExtraLife);
-                        }
-                        fx.write(Fx::new(pos.0, C_GREEN, FxKind::Rescue));
-                        fx.write(Fx::new(pos.0, C_GREEN, FxKind::Score(500)));
-                        sfx.write(Sfx::Landed);
-                    }
                 }
             }
         }
@@ -152,6 +158,19 @@ pub fn update_colonists(
         }
         tf.rotation = Quat::from_rotation_z(tilt);
     }
+    if landed > 0 {
+        let pts = set_down_each * landed;
+        if game.add_score(pts) {
+            sfx.write(Sfx::ExtraLife);
+        }
+        fx.write(Fx::new(
+            Vec2::new(ps.pos.x, ship_ground),
+            C_GREEN,
+            FxKind::Score(pts),
+        ));
+        sfx.write(Sfx::Landed);
+    }
+    ps.carried = carried;
 }
 
 #[cfg(test)]
@@ -251,6 +270,47 @@ mod tests {
         step(&mut w);
         assert_eq!(state(&w, e), Some(CState::Falling));
         assert_eq!(w.get::<Colonist>(e).unwrap().fall_from, 120.0);
+    }
+
+    #[test]
+    fn colonists_set_down_together_are_worth_more() {
+        let ground = terrain::height(X);
+        let mut w = world(Vec2::new(X, ground + 200.0));
+        let a = colonist(&mut w, CState::Carried, 80.0, 0.0);
+        let b = colonist(&mut w, CState::Carried, 80.0, 0.0);
+        step(&mut w);
+        assert_eq!(w.resource::<PlayerState>().carried, 2);
+        assert_eq!(w.resource::<Game>().score, 0);
+
+        w.resource_mut::<PlayerState>().pos = Vec2::new(X, ground + 20.0);
+        step(&mut w);
+        assert_eq!(state(&w, a), Some(CState::Walking));
+        assert_eq!(state(&w, b), Some(CState::Walking));
+        assert_eq!(w.resource::<Game>().score, 2 * 2 * SET_DOWN_POINTS);
+        assert_eq!(w.resource::<PlayerState>().carried, 0);
+    }
+
+    #[test]
+    fn set_down_bonus_is_capped() {
+        let ground = terrain::height(X);
+        let mut w = world(Vec2::new(X, ground + 20.0));
+        let n = CARRY_BONUS_MAX + 2;
+        for _ in 0..n {
+            colonist(&mut w, CState::Carried, 80.0, 0.0);
+        }
+        step(&mut w);
+        assert_eq!(
+            w.resource::<Game>().score,
+            n * CARRY_BONUS_MAX * SET_DOWN_POINTS
+        );
+    }
+
+    #[test]
+    fn carrying_slows_the_ship_down_to_a_limit() {
+        use crate::player::carry_speed;
+        assert_eq!(carry_speed(0), 1.0);
+        assert!((carry_speed(2) - (1.0 - 2.0 * CARRY_SLOW)).abs() < 1e-6);
+        assert_eq!(carry_speed(100), CARRY_MIN_SPEED);
     }
 
     #[test]

@@ -175,6 +175,7 @@ pub fn update_hud(
     time: Res<Time>,
     state: Res<State<GameState>>,
     game: Res<Game>,
+    ps: Res<PlayerState>,
     mut banner: ResMut<Banner>,
     mut flash: ResMut<Flash>,
     colonists: Query<(), With<Colonist>>,
@@ -226,7 +227,11 @@ pub fn update_hud(
     }
     if let Ok(mut t) = status.single_mut() {
         let people = if game.phase == Phase::Planet {
-            format!("COLONISTS {}", colonists.iter().count())
+            let carrying = match ps.carried {
+                0 => String::new(),
+                n => format!("   CARRYING {n} (x{})", n.min(CARRY_BONUS_MAX)),
+            };
+            format!("COLONISTS {}{carrying}", colonists.iter().count())
         } else {
             format!("VOID - {} WAVES TO REBUILD", game.void_waves_left)
         };

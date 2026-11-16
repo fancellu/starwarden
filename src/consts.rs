@@ -42,6 +42,14 @@ pub const COMBO_WINDOW: f32 = 4.0;
 pub const COMBO_STEP: u32 = 5;
 /// Highest score multiplier.
 pub const COMBO_MAX: u32 = 5;
+/// Fraction of top speed lost for each colonist carried.
+pub const CARRY_SLOW: f32 = 0.08;
+/// Slowest the ship gets, however many it carries (fraction of normal speed).
+pub const CARRY_MIN_SPEED: f32 = 0.6;
+/// Points for each colonist set down, multiplied by how many are set down together.
+pub const SET_DOWN_POINTS: u32 = 500;
+/// Highest set-down multiplier.
+pub const CARRY_BONUS_MAX: u32 = 5;
 
 // --- Weapons ----------------------------------------------------------------------------------
 pub const LASER_COOLDOWN: f32 = 0.085;

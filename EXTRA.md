@@ -19,7 +19,7 @@
 
 ## Colonists and the planet
 
-- 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
+- [x] 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
   set-down bonus.
 - 11 Colony buildings: a few domes on the surface; setting colonists down beside one earns more
   and, when full, the dome fires a ground turret at nearby Harvesters.
@@ -68,6 +68,6 @@
 
 - [x] 4 Combo multiplier: quick kills in a row raise a score multiplier; it resets when you are hit
   or go too long without a kill.
-- 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
+- [x] 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
   set-down bonus.
 - 29 Slow motion for a moment on a last-second catch or the final kill of a wave.

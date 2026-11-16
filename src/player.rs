@@ -29,6 +29,13 @@ pub struct PlayerState {
     pub facing: f32,
     pub alive: bool,
     pub respawn: f32,
+    /// Colonists hanging under the ship, counted by `update_colonists`.
+    pub carried: u32,
+}
+
+/// Fraction of normal speed left when carrying `n` colonists.
+pub fn carry_speed(n: u32) -> f32 {
+    (1.0 - CARRY_SLOW * n as f32).max(CARRY_MIN_SPEED)
 }
 
 impl Default for PlayerState {
@@ -39,6 +46,7 @@ impl Default for PlayerState {
             facing: 1.0,
             alive: false,
             respawn: 0.0,
+            carried: 0,
         }
     }
 }
@@ -89,9 +97,11 @@ pub fn player_control(
     if input.mv.x.abs() > 0.15 {
         p.facing = input.mv.x.signum();
     }
-    vel.0.x += input.mv.x * PLAYER_ACCEL * dt;
+    // Each colonist carried makes the ship a little slower.
+    let load = carry_speed(ps.carried);
+    vel.0.x += input.mv.x * PLAYER_ACCEL * load * dt;
     vel.0.x *= (-PLAYER_DRAG * dt).exp();
-    vel.0.x = vel.0.x.clamp(-PLAYER_MAX_VX, PLAYER_MAX_VX);
+    vel.0.x = vel.0.x.clamp(-PLAYER_MAX_VX * load, PLAYER_MAX_VX * load);
     vel.0.y += (input.mv.y * PLAYER_VY - vel.0.y) * smooth(14.0, dt);
 
     // Stay between the ground (or the bottom of the void) and the ceiling.
@@ -170,6 +180,7 @@ pub fn player_death(
     game.lives = game.lives.saturating_sub(1);
     game.break_combo();
     ps.alive = false;
+    ps.carried = 0;
     ps.vel = Vec2::ZERO;
     ps.respawn = 2.2;
 }

@@ -3,12 +3,15 @@
 //! Enable with the `STARWARDEN_DEMO` environment variable set to an output directory. Add
 //! `STARWARDEN_DEMO_VOID=1` to also wipe out the colonists mid-run and show the void phase.
 //! `STARWARDEN_DEMO_GALLERY=1` instead lines up every enemy type next to an idle ship.
+//! `STARWARDEN_DEMO_CARRY=1` instead clears the enemies, knocks three colonists loose high up,
+//! catches them, carries them for a while and sets them down together (use about 22 seconds).
 //! It does nothing unless the variable is set.
 
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{save_to_disk, Screenshot};
 
-use crate::colonists::Colonist;
+use crate::colonists::{CState, Colonist};
+use crate::consts::TOP_Y;
 use crate::enemies::{spawn_enemy, Enemy, Kind};
 use crate::input::PlayerInput;
 use crate::meshes::Art;
@@ -21,6 +24,7 @@ pub struct Demo {
     dir: String,
     void: bool,
     gallery: bool,
+    carry: bool,
     next_shot: usize,
     wiped: bool,
     /// Run length in seconds (`STARWARDEN_DEMO_SECS`, default 20).
@@ -38,6 +42,7 @@ pub fn plugin(app: &mut App) {
         dir,
         void: std::env::var("STARWARDEN_DEMO_VOID").is_ok(),
         gallery: std::env::var("STARWARDEN_DEMO_GALLERY").is_ok(),
+        carry: std::env::var("STARWARDEN_DEMO_CARRY").is_ok(),
         next_shot: 0,
         wiped: false,
         secs: std::env::var("STARWARDEN_DEMO_SECS")
@@ -56,14 +61,15 @@ pub fn plugin(app: &mut App) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn demo(
     time: Res<Time>,
     mut commands: Commands,
     mut demo: ResMut<Demo>,
     mut input: ResMut<PlayerInput>,
     mut last: Local<f32>,
-    colonists: Query<Entity, With<Colonist>>,
-    enemies: Query<&Pos, With<Enemy>>,
+    mut colonists: Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
+    enemies: Query<(Entity, &Pos), With<Enemy>>,
     ps: Res<PlayerState>,
     art: Res<Art>,
     mut rng: ResMut<Rng>,
@@ -101,11 +107,15 @@ fn demo(
                 }
             }
         }
+    } else if demo.carry {
+        if t > 1.5 {
+            carry_demo(t, &crossed, &mut commands, &mut input, &mut colonists, &enemies, &ps);
+        }
     } else if t > 1.5 {
         // Fly at the nearest enemy, then hold station a little way off and shoot.
         let nearest = enemies
             .iter()
-            .map(|p| delta(ps.pos, p.0))
+            .map(|(_, p)| delta(ps.pos, p.0))
             .min_by(|a, b| a.length().total_cmp(&b.length()));
         match nearest {
             Some(d) => {
@@ -128,7 +138,7 @@ fn demo(
     }
     if demo.void && !demo.wiped && t > 7.0 {
         demo.wiped = true;
-        for e in &colonists {
+        for (e, _, _) in &colonists {
             commands.entity(e).try_despawn();
         }
     }
@@ -143,4 +153,59 @@ fn demo(
         exit.write(AppExit::Success);
     }
     *last = t;
+}
+
+/// Seconds at which a colonist is knocked loose above the ship.
+const CARRY_DROPS: [f32; 3] = [3.0, 6.0, 9.0];
+/// Height the ship cruises at while carrying.
+const CARRY_CRUISE_Y: f32 = 150.0;
+
+/// The carry demo: no enemies; catch three falling colonists, cruise with them, set them down.
+fn carry_demo(
+    t: f32,
+    crossed: &dyn Fn(f32) -> bool,
+    commands: &mut Commands,
+    input: &mut PlayerInput,
+    colonists: &mut Query<(Entity, &mut Colonist, &mut Pos), Without<Enemy>>,
+    enemies: &Query<(Entity, &Pos), With<Enemy>>,
+    ps: &PlayerState,
+) {
+    for (e, _) in enemies {
+        commands.entity(e).try_despawn();
+    }
+    if !ps.alive {
+        return;
+    }
+    // As if a Harvester carrying the colonist had just been shot near the top of the screen.
+    if CARRY_DROPS.iter().any(|&at| crossed(at)) {
+        if let Some((_, mut c, mut pos)) = colonists
+            .iter_mut()
+            .find(|(_, c, _)| c.state == CState::Walking)
+        {
+            c.state = CState::Falling;
+            c.claimed_by = None;
+            c.vy = 0.0;
+            pos.0 = Vec2::new(ps.pos.x + 40.0, TOP_Y - 10.0);
+            c.fall_from = pos.0.y;
+        }
+    }
+    let falling = colonists
+        .iter()
+        .filter(|(_, c, _)| c.state == CState::Falling)
+        .map(|(_, _, p)| delta(ps.pos, p.0))
+        .min_by(|a, b| a.length().total_cmp(&b.length()));
+    let last_drop = CARRY_DROPS[CARRY_DROPS.len() - 1];
+    if let Some(d) = falling {
+        // Go and catch it.
+        input.mv = Vec2::new((d.x / 60.0).clamp(-1.0, 1.0), (d.y / 30.0).clamp(-1.0, 1.0));
+    } else if t < last_drop + 2.0 {
+        // Wait at cruising height for the next one.
+        input.mv.y = ((CARRY_CRUISE_Y - ps.pos.y) / 30.0).clamp(-1.0, 1.0);
+    } else if t < last_drop + 6.0 {
+        // Cruise at full throttle to show the ship is slower when loaded.
+        input.mv = Vec2::new(1.0, ((CARRY_CRUISE_Y - ps.pos.y) / 30.0).clamp(-1.0, 1.0));
+    } else {
+        // Dive to set everyone down together.
+        input.mv = Vec2::new(0.3, -1.0);
+    }
 }
