@@ -92,6 +92,7 @@ pub fn run_waves(
     mut sfx: MessageWriter<Sfx>,
 ) {
     let dt = time.delta_secs();
+    game.tick_combo(dt);
     match game.wave_state {
         WaveState::Intermission(t) => {
             let t = t - dt;

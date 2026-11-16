@@ -470,8 +470,12 @@ pub fn apply_damage(
         commands.entity(d.entity).try_despawn();
         let color = en.kind.color(en.elite);
         fx.write(Fx::new(pos.0, color, FxKind::Explosion));
-        let pts = en.kind.score() * if en.elite { 2 } else { 1 };
-        if pts >= 300 {
+        if game.register_kill() {
+            sfx.write(Sfx::Blip);
+        }
+        let mult = game.multiplier();
+        let pts = en.kind.score() * if en.elite { 2 } else { 1 } * mult;
+        if pts >= 300 || mult > 1 {
             fx.write(Fx::new(pos.0, color, FxKind::Score(pts)));
         }
         if game.add_score(pts) {

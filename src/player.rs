@@ -168,6 +168,7 @@ pub fn player_death(
     sfx.write(Sfx::PlayerDie);
     cam.shake = 1.4;
     game.lives = game.lives.saturating_sub(1);
+    game.break_combo();
     ps.alive = false;
     ps.vel = Vec2::ZERO;
     ps.respawn = 2.2;

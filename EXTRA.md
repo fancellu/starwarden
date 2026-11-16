@@ -8,7 +8,7 @@
 
 ## Player and weapons
 
-- 4 Combo multiplier: quick kills in a row raise a score multiplier; it resets when you are hit
+- [x] 4  Combo multiplier: quick kills in a row raise a score multiplier; it resets when you are hit
   or go too long without a kill.
 - 5 Overheat laser: holding fire builds heat; letting it cool just before the limit gives a
   short burst of stronger shots.
@@ -66,7 +66,7 @@
 
 ## Easy Wins
 
-- 4 Combo multiplier: quick kills in a row raise a score multiplier; it resets when you are hit
+- [x] 4 Combo multiplier: quick kills in a row raise a score multiplier; it resets when you are hit
   or go too long without a kill.
 - 10 Carry several colonists: each one carried slows the ship slightly but multiplies the
   set-down bonus.

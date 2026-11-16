@@ -55,6 +55,10 @@ pub struct Game {
     pub stalker_timer: f32,
     /// Seconds since the game-over screen appeared (used to ignore held buttons).
     pub over_time: f32,
+    /// Enemies destroyed in a row, each within `COMBO_WINDOW` of the last.
+    pub combo: u32,
+    /// Seconds left to make the next kill before the combo ends.
+    pub combo_timer: f32,
 }
 
 impl Default for Game {
@@ -73,6 +77,8 @@ impl Default for Game {
             wave_time: 0.0,
             stalker_timer: 0.0,
             over_time: 0.0,
+            combo: 0,
+            combo_timer: 0.0,
         }
     }
 }
@@ -98,6 +104,35 @@ impl Game {
         } else {
             false
         }
+    }
+
+    /// Score multiplier for enemy kills: x2 after `COMBO_STEP` quick kills, up to `COMBO_MAX`.
+    pub fn multiplier(&self) -> u32 {
+        (1 + self.combo / COMBO_STEP).min(COMBO_MAX)
+    }
+
+    /// Counts an enemy kill towards the combo; returns true when the multiplier went up.
+    pub fn register_kill(&mut self) -> bool {
+        let before = self.multiplier();
+        self.combo += 1;
+        self.combo_timer = COMBO_WINDOW;
+        self.multiplier() > before
+    }
+
+    /// Runs the combo timer down; the combo ends when it reaches zero.
+    pub fn tick_combo(&mut self, dt: f32) {
+        if self.combo == 0 {
+            return;
+        }
+        self.combo_timer -= dt;
+        if self.combo_timer <= 0.0 {
+            self.break_combo();
+        }
+    }
+
+    pub fn break_combo(&mut self) {
+        self.combo = 0;
+        self.combo_timer = 0.0;
     }
 }
 
@@ -212,5 +247,51 @@ mod tests {
         assert_eq!(g.score, 0);
         assert_eq!(g.high, 1234);
         assert_eq!(g.lives, START_LIVES);
+    }
+
+    #[test]
+    fn quick_kills_raise_the_multiplier_up_to_the_cap() {
+        let mut g = Game::default();
+        assert_eq!(g.multiplier(), 1);
+        for _ in 0..COMBO_STEP - 1 {
+            assert!(!g.register_kill());
+        }
+        assert!(g.register_kill());
+        assert_eq!(g.multiplier(), 2);
+        for _ in 0..100 {
+            g.register_kill();
+        }
+        assert_eq!(g.multiplier(), COMBO_MAX);
+    }
+
+    #[test]
+    fn combo_ends_when_the_window_passes() {
+        let mut g = Game::default();
+        for _ in 0..COMBO_STEP {
+            g.register_kill();
+        }
+        g.tick_combo(COMBO_WINDOW * 0.5);
+        assert_eq!(g.multiplier(), 2);
+        g.register_kill();
+        g.tick_combo(COMBO_WINDOW * 0.9);
+        assert_eq!(g.multiplier(), 2, "a kill refills the window");
+        g.tick_combo(COMBO_WINDOW * 0.2);
+        assert_eq!(g.multiplier(), 1);
+        assert_eq!(g.combo, 0);
+    }
+
+    #[test]
+    fn being_hit_or_a_new_game_ends_the_combo() {
+        let mut g = Game::default();
+        for _ in 0..COMBO_STEP * 2 {
+            g.register_kill();
+        }
+        g.break_combo();
+        assert_eq!(g.multiplier(), 1);
+        for _ in 0..COMBO_STEP {
+            g.register_kill();
+        }
+        g.reset();
+        assert_eq!(g.multiplier(), 1);
     }
 }

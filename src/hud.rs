@@ -215,9 +215,13 @@ pub fn update_hud(
     }
 
     if let Ok(mut t) = score.single_mut() {
+        let combo = match game.multiplier() {
+            1 => String::new(),
+            m => format!("\nCOMBO x{m}"),
+        };
         set_text(
             &mut t,
-            format!("SCORE {:07}\nBEST  {:07}", game.score, game.high),
+            format!("SCORE {:07}\nBEST  {:07}{combo}", game.score, game.high),
         );
     }
     if let Ok(mut t) = status.single_mut() {

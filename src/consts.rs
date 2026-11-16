@@ -36,6 +36,12 @@ pub const START_BOMBS: u32 = 3;
 pub const START_MISSILES: u32 = 4;
 pub const MAX_MISSILES: u32 = 8;
 pub const BONUS_EVERY: u32 = 10_000;
+/// Seconds after a kill in which the next kill keeps the combo going.
+pub const COMBO_WINDOW: f32 = 4.0;
+/// Kills in a row needed for each step up of the score multiplier.
+pub const COMBO_STEP: u32 = 5;
+/// Highest score multiplier.
+pub const COMBO_MAX: u32 = 5;
 
 // --- Weapons ----------------------------------------------------------------------------------
 pub const LASER_COOLDOWN: f32 = 0.085;

@@ -133,7 +133,9 @@ an entity at all: it sends a `Damage` message to every enemy on screen.
 Weapons never remove enemies themselves. They write a `Damage { entity, amount }` message,
 and `apply_damage` in `enemies.rs` is where enemies are destroyed. Scoring, explosions and
 the Hive bursting into Stingers therefore happen in one place, whatever did the damage:
-laser, missile, smart bomb or ramming the ship.
+laser, missile, smart bomb or ramming the ship. That is also where each kill feeds the combo
+multiplier kept on `Game` (`register_kill`, `multiplier`); `run_waves` runs its timer down and
+`player_death` ends it.
 
 ## Enemies
 

@@ -33,6 +33,10 @@ where you started. The scanner at the top of the screen shows the whole world.
 Weapons: a rapid-fire laser, a limited stock of homing missiles (two more each wave) and smart
 bombs that destroy everything on screen. Every 10,000 points earns an extra ship and bomb.
 
+Kill quickly for a **combo**: every 5 kills in a row, each within 4 seconds of the last, raise
+the score multiplier for enemies by one, up to x5. Losing your ship or pausing too long between
+kills ends it.
+
 ## Controls
 
 | Action     | Keyboard                | Gamepad                | Touch                   |
